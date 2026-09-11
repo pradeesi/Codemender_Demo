@@ -30,7 +30,10 @@ Follow these steps during a live customer presentation or demo.
 
 ### Step 0: Prerequisites & Setup
 
-Run these commands in your Cloud Shell terminal:
+> [!IMPORTANT]
+> **CodeMender Access Requirement**: CodeMender is currently in **Gated Preview** on Google Cloud Vertex AI / Gemini Enterprise Agent Platform. Your Google Cloud Project ID must be allowlisted by Google to access the backend service. See [Troubleshooting](#-troubleshooting--common-issues) if you receive a 403 error.
+
+Run these commands in your Cloud Shell or local terminal:
 
 ```bash
 cd /home/admin_/Codemender_Demo
@@ -41,14 +44,23 @@ pip install -r requirements.txt
 # 2. Verify baseline tests pass
 python3 test_app.py
 
-# 3. Authenticate with Google Cloud Application Default Credentials (ADC)
-gcloud auth application-default login
+# 3. Set your target Google Cloud Project ID
+export GOOGLE_CLOUD_PROJECT=$(gcloud config get-value project)
 
-# 4. Verify CodeMender CLI is installed
+# 4. Enable required Google Cloud APIs
+gcloud services enable aiplatform.googleapis.com cloudresourcemanager.googleapis.com
+
+# 5. Authenticate Application Default Credentials (ADC)
+gcloud auth application-default login --project $GOOGLE_CLOUD_PROJECT
+
+# 6. Verify CodeMender CLI is installed
 cm --version
 
-# 5. Initialize CodeMender workspace (one-time setup)
+# 7. Initialize CodeMender workspace (one-time setup)
 cm init
+
+# 8. Check environment verification
+cm init --verify
 ```
 
 ---
@@ -163,3 +175,49 @@ python3 app.py
 ```
 Your workspace is now completely fresh and ready for the next demo!
 
+---
+
+## ⚠️ Troubleshooting & Common Issues
+
+### Issue 1: `StartSession failed with HTTP 403 Forbidden` / `Unsupported agent interaction: codemender-preview`
+
+```text
+Error: starting session: StartSession failed with HTTP 403 Forbidden.
+Access to the CodeMender preview release must be coordinated. Please contact your GCP sales contact for obtaining approval and onboarding to the CodeMender preview.
+```
+
+* **Cause**: CodeMender is in gated Preview. The target Google Cloud Project ID has not yet been added to Google's server-side allowlist for the `codemender-preview` agent interaction.
+* **Resolution**:
+  1. **Request Onboarding**: Contact your Google Cloud Sales Representative, Customer Engineer (CE), or account team. Provide your **Project ID** (`gcloud config get-value project`) and **Project Number** to be added to the preview allowlist.
+  2. **Switch to an Allowlisted Project**: If your organization already has an approved project, switch your active configuration:
+     ```bash
+     gcloud config set project <ONBOARDED_PROJECT_ID>
+     export GOOGLE_CLOUD_PROJECT=<ONBOARDED_PROJECT_ID>
+     gcloud auth application-default login --project <ONBOARDED_PROJECT_ID>
+     ```
+  3. **Offline / Fallback Presentation Mode**: If you need to present to a customer before allowlisting is complete, deliver a full walkthrough using the local application:
+     * Show the interactive browser UI at `http://127.0.0.1:5000/` demonstrating normal search vs `' OR '1'='1` exploit.
+     * Run the unit tests (`python3 test_app.py`).
+     * Compare [`app.py`](app.py) (vulnerable) with [`app_annotated.py`](app_annotated.py) (remediated parameterized query).
+     * Walk through the agentic steps (`cm find` &rarr; `cm verify` &rarr; `cm fix`) using this README.
+
+---
+
+### Issue 2: `Error: CodeMender has not been initialized. Run 'cm init' first`
+
+* **Cause**: The local state directory `~/.codemender/` and configuration file `config.yaml` are missing.
+* **Resolution**:
+  ```bash
+  cm init
+  cm init --verify
+  ```
+
+---
+
+### Issue 3: `Agent Platform API has not been used in project ... or it is disabled`
+
+* **Cause**: The Vertex AI API is not enabled in your current GCP project.
+* **Resolution**:
+  ```bash
+  gcloud services enable aiplatform.googleapis.com cloudresourcemanager.googleapis.com
+  ```

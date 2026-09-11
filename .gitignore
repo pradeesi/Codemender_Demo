@@ -4,3 +4,5 @@ __pycache__/
 demo.db
 .env
 .venv/
+.cm_project
+*.log
