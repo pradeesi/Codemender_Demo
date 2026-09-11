@@ -43,6 +43,9 @@ gcloud auth application-default login
 
 # 4. Verify CodeMender CLI is installed
 cm --version
+
+# 5. Initialize CodeMender workspace (one-time setup)
+cm init
 ```
 
 ---
