@@ -15,23 +15,38 @@ class AppTestCase(unittest.TestCase):
     def setUp(self):
         self.client = app.test_client()
 
-    def test_get_valid_user(self):
-        """Test legitimate user lookup."""
+    def test_web_index(self):
+        """Test home page loads with search form."""
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Employee Directory", response.data)
+        self.assertIn(b"Quick tests", response.data)
+
+    def test_web_search(self):
+        """Test search query on web UI."""
+        response = self.client.get("/?username=alice")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"alice@example.com", response.data)
+
+    def test_get_valid_user_api(self):
+        """Test legitimate user lookup via API."""
         response = self.client.get("/api/user?username=alice")
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
         self.assertEqual(data["count"], 1)
         self.assertEqual(data["users"][0]["username"], "alice")
 
-    def test_missing_user_param(self):
+    def test_missing_user_param_api(self):
         """Test missing username returns 400."""
         response = self.client.get("/api/user")
         self.assertEqual(response.status_code, 400)
 
-    def test_missing_ping_param(self):
-        """Test missing host returns 400."""
-        response = self.client.get("/api/ping")
-        self.assertEqual(response.status_code, 400)
+    def test_sql_injection_exploit_api(self):
+        """Test that SQL injection leaks all database users."""
+        response = self.client.get("/api/user?username=alice'%20OR%20'1'='1")
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertEqual(data["count"], 3)
 
 
 if __name__ == "__main__":

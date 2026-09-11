@@ -1,24 +1,23 @@
-# CodeMender Customer Demo: Vulnerability Remediation
+# CodeMender Customer Demo: SQL Injection Remediation
 
-This project is a lightweight, easy-to-explain Python (Flask) service designed specifically to showcase **Google Cloud CodeMender**'s three-stage agentic workflow: **Find**, **Verify**, and **Fix**.
+This project is a lightweight, easy-to-explain Python (Flask) web application designed specifically to showcase **Google Cloud CodeMender**'s three-stage agentic workflow: **Find**, **Verify**, and **Fix**.
 
 ---
 
 ## 🎯 Files in this Directory
 
-* **[`app.py`](app.py)** (Main File): Clean application (~60 lines) without comments detailing vulnerabilities. Use this for the live scanning test.
+* **[`app.py`](app.py)** (Main File): Interactive Flask web application with a search UI and REST API containing a SQL injection vulnerability.
 * **[`app_annotated.py`](app_annotated.py)**: Annotated reference version containing detailed threat models, exploits, and remediation details for your own reference.
 * **[`test_app.py`](test_app.py)**: Unit tests verifying baseline functionality (used by CodeMender for regression checks).
 * **[`requirements.txt`](requirements.txt)**: Minimal project dependencies (`flask`).
 
 ---
 
-## 🔍 Vulnerabilities Present in [`app.py`](app.py)
+## 🔍 Vulnerability Present in [`app.py`](app.py)
 
 | Endpoint | Vulnerability | CWE | What it Does | Expected Exploit |
 | :--- | :--- | :--- | :--- | :--- |
-| `GET /api/user?username=` | **SQL Injection** | [CWE-89](https://cwe.mitre.org/data/definitions/89.html) | Direct string formatting into SQLite query: `f"SELECT ... WHERE username = '{username}'"` | `alice' OR '1'='1` dumps unauthorized user records. |
-| `GET /api/ping?host=` | **OS Command Injection** | [CWE-78](https://cwe.mitre.org/data/definitions/78.html) | Direct string formatting into `subprocess.check_output(..., shell=True)` | `127.0.0.1; whoami` executes arbitrary OS commands. |
+| `GET /` and `GET /api/user?username=` | **SQL Injection** | [CWE-89](https://cwe.mitre.org/data/definitions/89.html) | Direct string formatting into SQLite query: `f"SELECT ... WHERE username = '{username}'"` | `alice' OR '1'='1` dumps unauthorized user records. |
 
 ---
 
@@ -42,24 +41,20 @@ python3 app.py
 ```
 *(The server will start on `http://127.0.0.1:5000`)*
 
-### 1.4 Test Legitimate Requests (in another terminal)
+### 1.4 Interactive Web Application (Browser)
+Open your browser or Cloud Shell web preview on port `5000`:
+* **Home Page**: `http://127.0.0.1:5000/`
+* Use the built-in search box or click the one-click quick test buttons:
+  1. **Normal Search**: Searches for `alice` (returns 1 legitimate record).
+  2. **Exploit**: Injects `alice' OR '1'='1` (bypasses check, dumps all 3 records, and highlights the executed SQL query).
+
+### 1.5 Command Line (curl)
 ```bash
 # Legitimate user lookup
 curl "http://127.0.0.1:5000/api/user?username=alice"
 
-# Legitimate network ping
-curl "http://127.0.0.1:5000/api/ping?host=127.0.0.1"
-```
-
-### 1.5 Demonstrate the Vulnerabilities (Before CodeMender)
-Show the customer how these vulnerabilities can be actively exploited:
-
-```bash
-# 1. SQL Injection: Bypass query logic to leak all users in the database
+# SQL Injection exploit
 curl "http://127.0.0.1:5000/api/user?username=alice'%20OR%20'1'='1"
-
-# 2. Command Injection: Inject arbitrary shell commands (e.g., whoami, id)
-curl "http://127.0.0.1:5000/api/ping?host=127.0.0.1;whoami"
 ```
 
 ---
@@ -73,7 +68,7 @@ Ensure your Google Cloud credentials and environment are configured:
 # Authenticate using Google Cloud Application Default Credentials (ADC)
 gcloud auth application-default login
 
-# Ensure 'cm' CLI binary is in your PATH (e.g., if unzipped from cm-linux-amd64.zip)
+# Ensure 'cm' CLI binary is in your PATH
 export PATH="$HOME/.local/bin:$PATH"
 cm --version
 ```
@@ -81,16 +76,13 @@ cm --version
 ---
 
 ### 2.2 Step 1: Scan and Discover (`cm find`)
-Scan the codebase to find vulnerabilities using CodeMender's DeepMind security-specialized prompts:
+Scan the codebase to find vulnerabilities using CodeMender:
 
 ```bash
 cd /home/admin_/Codemender_Demo
 
 # Scan current directory with rolling status line
 cm find . --compact
-
-# Optional: explicitly specify model (default: gemini-3.7-flash)
-cm find . --compact --model gemini-3.7-flash
 
 # Or target specific file directly
 cm find ./app.py --compact
@@ -101,14 +93,10 @@ cm find ./app.py --compact
 ---
 
 ### 2.3 Step 2: Actively Prove Exploitability (`cm verify`)
-Have CodeMender attempt to construct test cases and verify whether the findings are actually exploitable inside the local sandbox:
+Have CodeMender construct test cases and verify whether the findings are actually exploitable:
 
 ```bash
-# Actively verify discovered vulnerabilities
 cm verify . --compact
-
-# Target specific file
-cm verify ./app.py --compact
 ```
 
 > **Talking Point for Customer**: CodeMender builds the code and safely attempts reproduction in a local process sandbox. This drastically reduces false positives so engineers only spend time on real, exploitable threats.
@@ -119,21 +107,7 @@ cm verify ./app.py --compact
 Ask CodeMender to generate language-compatible patches and validate that tests still pass:
 
 ```bash
-# Fix and patch verified vulnerabilities
 cm fix . --compact
-
-# Target specific file
-cm fix ./app.py --compact
 ```
 
-> **Talking Point for Customer**: CodeMender does not just give generic advice—it writes the secure patch (parameterizing the SQL query and eliminating `shell=True`), runs [`test_app.py`](test_app.py) to prevent regressions, and displays the git diff for review before accepting.
-
----
-
-### 2.5 Optional: Resuming Sessions
-If a scan or fix operation was paused or interrupted:
-
-```bash
-# Resume an existing CodeMender session
-cm session resume --compact
-```
+> **Talking Point for Customer**: CodeMender writes the secure patch (parameterizing the SQL query with placeholders), runs [`test_app.py`](test_app.py) to prevent regressions, and displays the git diff for review before accepting.
