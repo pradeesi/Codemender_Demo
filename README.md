@@ -138,3 +138,25 @@ cm fix ./app.py --compact
 | **2. Find** | `cm find . --compact` | Pinpoints CWE-89 in [`app.py`](app.py) without noise |
 | **3. Verify** | `cm verify . --compact` | Safely executes exploit payload in sandbox to confirm threat |
 | **4. Fix** | `cm fix ./app.py --compact` | Parameterizes query, verifies unit tests pass, shows git diff |
+
+---
+
+## 🔄 Resetting the Demo for Another Customer
+
+When you run `cm fix`, CodeMender modifies [`app.py`](app.py) to secure the code. To reset everything back to the vulnerable state for your next customer presentation:
+
+```bash
+cd /home/admin_/Codemender_Demo
+
+# 1. Reset code back to the vulnerable baseline (via CodeMender or Git)
+cm vcs reset --force
+# (Or: git reset --hard origin/main)
+
+# 2. Clear CodeMender's local findings cache and generated reports
+cm clean
+
+# 3. Restart the Flask app if needed
+python3 app.py
+```
+Your workspace is now completely fresh and ready for the next demo!
+
