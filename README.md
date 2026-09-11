@@ -6,7 +6,7 @@ This project is a lightweight, easy-to-explain Python (Flask) web application de
 
 ## 🎯 Files in this Directory
 
-* **[`app.py`](app.py)** (Main File): Interactive Flask web application with a search UI and REST API containing a SQL injection vulnerability.
+* **[`app.py`](app.py)** (Main File): Interactive Flask web application with a search UI and REST API containing an intentional SQL injection vulnerability.
 * **[`app_annotated.py`](app_annotated.py)**: Annotated reference version containing detailed threat models, exploits, and remediation details for your own reference.
 * **[`test_app.py`](test_app.py)**: Unit tests verifying baseline functionality (used by CodeMender for regression checks).
 * **[`requirements.txt`](requirements.txt)**: Minimal project dependencies (`flask`).
@@ -21,93 +21,117 @@ This project is a lightweight, easy-to-explain Python (Flask) web application de
 
 ---
 
-## 💻 1. Commands to Run and Test the Application
+## 🚀 Step-by-Step Customer Demo Guide
 
-### 1.1 Install Dependencies
+Follow these steps during a live customer presentation or demo.
+
+### Step 0: Prerequisites & Setup
+
+Run these commands in your Cloud Shell terminal:
+
 ```bash
 cd /home/admin_/Codemender_Demo
+
+# 1. Install dependencies
 pip install -r requirements.txt
-```
 
-### 1.2 Run Unit Tests
-Verify baseline functionality passes:
-```bash
+# 2. Verify baseline tests pass
 python3 test_app.py
-```
 
-### 1.3 Start the Flask Server
-```bash
-python3 app.py
-```
-*(The server will start on `http://127.0.0.1:5000`)*
-
-### 1.4 Interactive Web Application (Browser)
-Open your browser or Cloud Shell web preview on port `5000`:
-* **Home Page**: `http://127.0.0.1:5000/`
-* Use the built-in search box or click the one-click quick test buttons:
-  1. **Normal Search**: Searches for `alice` (returns 1 legitimate record).
-  2. **Exploit**: Injects `alice' OR '1'='1` (bypasses check, dumps all 3 records, and highlights the executed SQL query).
-
-### 1.5 Command Line (curl)
-```bash
-# Legitimate user lookup
-curl "http://127.0.0.1:5000/api/user?username=alice"
-
-# SQL Injection exploit
-curl "http://127.0.0.1:5000/api/user?username=alice'%20OR%20'1'='1"
-```
-
----
-
-## 🤖 2. Exact CodeMender CLI Commands
-
-### 2.1 Prerequisites & Authentication
-Ensure your Google Cloud credentials and environment are configured:
-
-```bash
-# Authenticate using Google Cloud Application Default Credentials (ADC)
+# 3. Authenticate with Google Cloud Application Default Credentials (ADC)
 gcloud auth application-default login
 
-# Ensure 'cm' CLI binary is in your PATH
-export PATH="$HOME/.local/bin:$PATH"
+# 4. Verify CodeMender CLI is installed
 cm --version
 ```
 
 ---
 
-### 2.2 Step 1: Scan and Discover (`cm find`)
-Scan the codebase to find vulnerabilities using CodeMender:
+### Step 1: Start the Web Application & Show the Live Vulnerability (The Hook)
 
+Start the Flask server:
 ```bash
-cd /home/admin_/Codemender_Demo
-
-# Scan current directory with rolling status line
-cm find . --compact
-
-# Or target specific file directly
-cm find ./app.py --compact
+python3 app.py
 ```
+*(The server will start on `http://127.0.0.1:5000`)*
 
-> **Talking Point for Customer**: Unlike legacy static analysis tools that flood teams with theoretical warnings, CodeMender pinpoints exact context and explains the exploit vector.
+#### In the Browser:
+1. Open Cloud Shell **Web Preview** on port `5000` (or visit `http://127.0.0.1:5000/`).
+2. Click **`1. Normal Search (alice)`**:
+   * Returns only Alice's record (1 row) with a green status alert.
+3. Click **`3. Exploit (alice' OR '1'='1')`**:
+   * Triggers the SQL injection and dumps all 3 database records (Alice, Bob, Charlie).
+   * Point out the **"Behind the scenes"** box displaying the unescaped query:
+     ```sql
+     SELECT id, username, email, role FROM users WHERE username = 'alice' OR '1'='1'
+     ```
+
+> **🎙️ Talking Point for the Customer:**  
+> *"Dynamic string concatenation in SQL queries remains one of the most common web security vulnerabilities (CWE-89). Now let's see how CodeMender autonomously discovers and proves this vulnerability without noisy static alerts."*
 
 ---
 
-### 2.3 Step 2: Actively Prove Exploitability (`cm verify`)
-Have CodeMender construct test cases and verify whether the findings are actually exploitable:
+### Step 2: Discover the Vulnerability (`cm find`)
+
+Open a new terminal tab and scan the codebase with CodeMender:
+
+```bash
+cd /home/admin_/Codemender_Demo
+cm find . --compact
+```
+*(Or target the file directly: `cm find ./app.py --compact`)*
+
+#### What the Customer Sees:
+* CodeMender scans the project with DeepMind security-specialized LLMs.
+* It pinpoints the exact file and line numbers in [`app.py`](app.py).
+* Identifies **CWE-89: SQL Injection** and displays an explanation of the risk.
+
+> **🎙️ Talking Point for the Customer:**  
+> *"Traditional static analysis tools (SAST) flood developers with dozens of false positives and theoretical warnings. CodeMender understands code semantics and context, cutting out noise to highlight real vulnerabilities."*
+
+---
+
+### Step 3: Actively Prove Exploitability in Sandbox (`cm verify`)
+
+This is the central differentiator of CodeMender:
 
 ```bash
 cm verify . --compact
 ```
+*(Or target the file directly: `cm verify ./app.py --compact`)*
 
-> **Talking Point for Customer**: CodeMender builds the code and safely attempts reproduction in a local process sandbox. This drastically reduces false positives so engineers only spend time on real, exploitable threats.
+#### What the Customer Sees:
+* CodeMender spins up an isolated local sandbox.
+* It synthesizes a proof-of-concept exploit payload (`' OR '1'='1`).
+* It executes the exploit against the local application and captures the unauthorized database records.
+* Marks the finding as **VERIFIED / EXPLOITABLE**.
+
+> **🎙️ Talking Point for the Customer:**  
+> *"This is CodeMender's key differentiator: **Active Proof of Exploitability**. CodeMender doesn't just guess—it safely constructs a reproduction payload inside an isolated sandbox to confirm if the vulnerability is truly exploitable before notifying security engineers."*
 
 ---
 
-### 2.4 Step 3: Autonomous Remediation (`cm fix`)
-Ask CodeMender to generate language-compatible patches and validate that tests still pass:
+### Step 4 (Optional): Autonomous Remediation (`cm fix`)
+
+If the customer asks *"Can it fix the issue for us?"*, explain how CodeMender repairs the code:
 
 ```bash
-cm fix . --compact
+cm fix ./app.py --compact
 ```
 
-> **Talking Point for Customer**: CodeMender writes the secure patch (parameterizing the SQL query with placeholders), runs [`test_app.py`](test_app.py) to prevent regressions, and displays the git diff for review before accepting.
+#### What You Can Explain:
+1. **Autonomous Patching**: CodeMender replaces string concatenation with parameterized queries (`WHERE username = ?`).
+2. **Regression Testing**: It automatically runs [`test_app.py`](test_app.py) to guarantee the fix doesn't break existing functionality.
+3. **Human in the Loop**: Displays a clean Git diff for developer review before anything is committed.
+
+---
+
+## 📋 Demo Cheat Sheet
+
+| Step | Action / Command | What to Highlight |
+| :--- | :--- | :--- |
+| **0. Test** | `python3 test_app.py` | 5 unit tests pass cleanly |
+| **1. Hook** | `http://127.0.0.1:5000/` | Interactive web UI: normal search vs `' OR '1'='1` exploit |
+| **2. Find** | `cm find . --compact` | Pinpoints CWE-89 in [`app.py`](app.py) without noise |
+| **3. Verify** | `cm verify . --compact` | Safely executes exploit payload in sandbox to confirm threat |
+| **4. Fix** | `cm fix ./app.py --compact` | Parameterizes query, verifies unit tests pass, shows git diff |
