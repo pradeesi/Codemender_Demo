@@ -1,5 +1,11 @@
 """
 Vulnerable Demo Application for CodeMender (Annotated Version)
+Author: Pradeep Singh
+
+DISCLAIMER:
+This is demonstration code designed exclusively for educational and testing
+purposes. It is provided "AS IS", WITHOUT WARRANTY OF ANY KIND, express or
+implied. Do not use this code in production environments.
 ==============================================================
 This is a lightweight Flask application built to demonstrate CodeMender's
 agentic capabilities: discovering, verifying, and patching security flaws.

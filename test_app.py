@@ -1,3 +1,13 @@
+"""
+Unit Tests for CodeMender Demo Application
+Author: Pradeep Singh
+
+DISCLAIMER:
+This is demonstration code designed exclusively for educational and testing
+purposes. It is provided "AS IS", WITHOUT WARRANTY OF ANY KIND, express or
+implied.
+"""
+
 import os
 import unittest
 import json

@@ -2,6 +2,9 @@
 
 This project is a lightweight, easy-to-explain Python (Flask) web application designed specifically to showcase **Google Cloud CodeMender**'s three-stage agentic workflow: **Find**, **Verify**, and **Fix**.
 
+**Author**: Pradeep Singh  
+**Disclaimer**: *This repository contains intentionally vulnerable demonstration code created exclusively for educational and testing purposes. It is provided "AS IS", without warranty of any kind, express or implied. Do not deploy or use this code in production environments.*
+
 ---
 
 ## 🎯 Files in this Directory

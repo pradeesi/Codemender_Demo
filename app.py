@@ -1,3 +1,13 @@
+"""
+CodeMender Customer Demo Application: SQL Injection (CWE-89)
+Author: Pradeep Singh
+
+DISCLAIMER:
+This is demonstration code designed exclusively for educational and testing
+purposes. It is provided "AS IS", WITHOUT WARRANTY OF ANY KIND, express or
+implied. Do not use this code in production environments.
+"""
+
 import sqlite3
 from flask import Flask, request, jsonify, render_template_string
 
