@@ -1,221 +1,283 @@
 """
-CodeMender Customer Demo Application: SQL Injection (CWE-89)
-Author: Pradeep Singh
-
-DISCLAIMER:
-This is demonstration code designed exclusively for educational and testing
-purposes. It is provided "AS IS", WITHOUT WARRANTY OF ANY KIND, express or
-implied. Do not use this code in production environments.
+Purpose: Core Flask web application for the ApexFin Banking Portal demonstration.
+Architecture/Context: Enterprise banking portal with web front-end routes and backend REST APIs.
+Dependencies/Side Effects: Interacts with SQLite database via database.py; invokes system ping commands for gateway diagnostics.
 """
 
+import os
 import sqlite3
-from flask import Flask, request, jsonify, render_template_string
+import subprocess
+import logging
+from typing import Tuple, Dict, Any, Union
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from database import get_db_connection, init_db, DEFAULT_DB_PATH
+
+# Configure structured semantic logging
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
+logger = logging.getLogger("apexfin.app")
 
 app = Flask(__name__)
-DB_FILE = "demo.db"
+# Secret key loaded securely from environment variable
+app.secret_key = os.getenv("SECRET_KEY", "apexfin-dev-secret-key-391823901")
+
+# Ensure database exists upon application start
+init_db()
 
 
-def init_db():
-    """Initializes the database with sample user data."""
-    conn = sqlite3.connect(DB_FILE)
+@app.route("/")
+def index() -> str:
+    """
+    Render main banking portal dashboard with overview statistics and recent transactions.
+
+    Parameters:
+        None
+
+    Returns:
+        str: Rendered HTML template for dashboard.
+
+    Exceptions/Errors:
+        sqlite3.Error: Handled by returning empty datasets if database access fails.
+    """
+    logger.info("Serving banking overview dashboard")
+    conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            email TEXT,
-            role TEXT
-        )
-    """)
-    cursor.execute("SELECT COUNT(*) FROM users")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany(
-            "INSERT INTO users (username, email, role) VALUES (?, ?, ?)",
-            [
-                ("alice", "alice@example.com", "admin"),
-                ("bob", "bob@example.com", "developer"),
-                ("charlie", "charlie@example.com", "analyst"),
-            ]
-        )
-        conn.commit()
+
+    # Query public commercial accounts summary
+    cursor.execute("SELECT COUNT(*) AS total_accounts, SUM(balance) AS total_assets FROM accounts WHERE is_confidential = 0")
+    stats = cursor.fetchone()
+
+    # Query recent wire transfers
+    cursor.execute("SELECT * FROM wire_transfers ORDER BY id DESC LIMIT 5")
+    recent_wires = cursor.fetchall()
     conn.close()
 
-
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SQL Injection Demo - User Lookup</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-        body { background: #f0f2f5; color: #1c1e21; padding: 30px 20px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .card { background: white; border-radius: 12px; padding: 28px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 24px; }
-        h1 { font-size: 24px; margin-bottom: 8px; color: #1a73e8; }
-        p.subtitle { color: #5f6368; font-size: 14px; margin-bottom: 24px; }
-        .search-box { display: flex; gap: 10px; margin-bottom: 16px; }
-        input[type="text"] { flex: 1; padding: 12px 16px; font-size: 15px; border: 1px solid #dadce0; border-radius: 8px; outline: none; }
-        input[type="text"]:focus { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }
-        button { background: #1a73e8; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; }
-        button:hover { background: #1557b0; }
-        .quick-tests { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
-        .quick-tests span { font-size: 13px; font-weight: 600; color: #70757a; }
-        .btn-test { background: #e8f0fe; color: #1967d2; padding: 6px 14px; border-radius: 20px; font-size: 13px; text-decoration: none; font-weight: 500; transition: background 0.2s; }
-        .btn-test:hover { background: #d2e3fc; }
-        .btn-exploit { background: #fce8e6; color: #c5221f; }
-        .btn-exploit:hover { background: #fad2cf; }
-        .sql-box { background: #202124; color: #e8eaed; border-radius: 8px; padding: 16px; margin: 20px 0; font-family: 'Courier New', Courier, monospace; font-size: 14px; overflow-x: auto; }
-        .sql-label { font-size: 12px; color: #9aa0a6; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-        .sql-keyword { color: #8ab4f8; font-weight: bold; }
-        .sql-injected { color: #f28b82; font-weight: bold; background: rgba(234,67,53,0.2); padding: 2px 4px; border-radius: 4px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #e0e0e0; font-size: 14px; }
-        th { background: #f8f9fa; color: #5f6368; font-weight: 600; }
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; }
-        .badge-admin { background: #fce8e6; color: #c5221f; }
-        .badge-dev { background: #e8f0fe; color: #1967d2; }
-        .badge-analyst { background: #e6f4ea; color: #137333; }
-        .alert { padding: 14px 18px; border-radius: 8px; font-size: 14px; margin: 16px 0; }
-        .alert-warning { background: #fef7e0; border-left: 4px solid #f9ab00; color: #7c4a00; }
-        .alert-success { background: #e6f4ea; border-left: 4px solid #137333; color: #137333; }
-        .alert-info { background: #e8f0fe; border-left: 4px solid #1a73e8; color: #1967d2; }
-        .explain-card h2 { font-size: 18px; margin-bottom: 12px; color: #202124; }
-        .explain-card p { font-size: 14px; line-height: 1.6; color: #3c4043; margin-bottom: 12px; }
-        .code-snippet { background: #f8f9fa; border: 1px solid #dadce0; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 13px; color: #202124; margin: 8px 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="card">
-            <h1>Employee Directory</h1>
-            <p class="subtitle">Demonstration of SQL Injection (CWE-89) in Python Flask</p>
-
-            <form method="GET" action="/" class="search-box">
-                <input type="text" name="username" placeholder="Search by username (e.g. alice)" value="{{ username }}">
-                <button type="submit">Search</button>
-            </form>
-
-            <div class="quick-tests">
-                <span>Quick tests:</span>
-                <a href="/?username=alice" class="btn-test">1. Normal Search (alice)</a>
-                <a href="/?username=bob" class="btn-test">2. Normal Search (bob)</a>
-                <a href="/?username=alice%27+OR+%271%27%3D%271" class="btn-test btn-exploit">3. Exploit (alice' OR '1'='1)</a>
-            </div>
-
-            {% if username %}
-                <div class="sql-box">
-                    <div class="sql-label">Behind the scenes &mdash; Executed SQL Query</div>
-                    <code>SELECT id, username, email, role FROM users WHERE username = '{{ username }}'</code>
-                </div>
-
-                {% if is_exploit %}
-                    <div class="alert alert-warning">
-                        <strong>⚠️ SQL Injection Successful!</strong> The input <code>' OR '1'='1</code> broke out of the string quotes. Because <code>'1'='1'</code> is always True, the database returned <strong>all {{ users|length }} records</strong> instead of just Alice.
-                    </div>
-                {% elif users|length == 1 %}
-                    <div class="alert alert-success">
-                        <strong>✓ Legitimate Query:</strong> Found 1 record matching username <code>{{ username }}</code>.
-                    </div>
-                {% else %}
-                    <div class="alert alert-info">
-                        Found {{ users|length }} record(s).
-                    </div>
-                {% endif %}
-
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Username</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for user in users %}
-                        <tr>
-                            <td>{{ user.id }}</td>
-                            <td><strong>{{ user.username }}</strong></td>
-                            <td>{{ user.email }}</td>
-                            <td>
-                                {% if user.role == 'admin' %}
-                                    <span class="badge badge-admin">{{ user.role }}</span>
-                                {% elif user.role == 'developer' %}
-                                    <span class="badge badge-dev">{{ user.role }}</span>
-                                {% else %}
-                                    <span class="badge badge-analyst">{{ user.role }}</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            {% endif %}
-        </div>
-
-        <div class="card explain-card">
-            <h2>💡 How does this SQL Injection work?</h2>
-            <p>In <code>app.py</code>, user input is concatenated directly into the SQL query using Python string formatting:</p>
-            <div class="code-snippet">
-                query = f"SELECT ... WHERE username = '{username}'"
-            </div>
-            <p>When someone enters <code>alice' OR '1'='1</code>, the single quote closes the username field, turning the condition into an "OR true", forcing SQLite to return every record in the table.</p>
-            <p><strong>The Fix:</strong> Use parameterized queries (prepared statements) with <code>?</code> placeholders:</p>
-            <div class="code-snippet">
-                cursor.execute("SELECT ... WHERE username = ?", (username,))
-            </div>
-        </div>
-    </div>
-</body>
-</html>
-"""
+    return render_template("index.html", stats=stats, recent_wires=recent_wires)
 
 
-@app.route("/", methods=["GET"])
-def index():
-    """Web interface for searching users and demonstrating SQL injection."""
-    username = request.args.get("username", "")
-    users = []
-    is_exploit = False
+@app.route("/accounts")
+def accounts_view() -> str:
+    """
+    Render account search page and execute user-supplied filter query.
 
-    if username:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
+    VULNERABILITY NOTE (FOR CODEMENDER DEMO):
+    Contains CWE-89 (SQL Injection) via direct string concatenation in query construction.
+    An attacker can inject SQL syntax to bypass is_confidential=0 filters and extract classified bank reserves.
 
-        # VULNERABLE: Direct string formatting allows SQL Injection
-        query = f"SELECT id, username, email, role FROM users WHERE username = '{username}'"
+    Parameters:
+        None (Reads query parameters: 'q' and 'type')
+
+    Returns:
+        str: Rendered HTML template displaying filtered bank accounts.
+    """
+    search_term = request.args.get("q", "").strip()
+    account_type = request.args.get("type", "ALL").strip()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Intentional CWE-89 Vulnerability:
+    # Direct f-string formatting into SQL statement allows SQL injection payloads
+    # e.g., ' OR '1'='1' --
+    if search_term:
+        # Intentional CWE-89 Vulnerability:
+        # String concatenation allows SQL injection to break out and comment out the confidentiality clause
+        query = f"SELECT id, account_number, customer_name, email, account_type, balance, status, is_confidential FROM accounts WHERE customer_name LIKE '%{search_term}%' AND is_confidential = 0"
+        logger.warning("Executing dynamic search query: %s", query)
+    elif account_type and account_type != "ALL":
+        query = f"SELECT id, account_number, customer_name, email, account_type, balance, status, is_confidential FROM accounts WHERE is_confidential = 0 AND account_type = '{account_type}'"
+        logger.warning("Executing dynamic type query: %s", query)
+    else:
+        query = "SELECT id, account_number, customer_name, email, account_type, balance, status, is_confidential FROM accounts WHERE is_confidential = 0"
+
+    try:
         cursor.execute(query)
-        rows = cursor.fetchall()
+        accounts = cursor.fetchall()
+    except sqlite3.OperationalError as e:
+        logger.error("SQL operational error during query execution: %s", str(e))
+        flash(f"Database Query Error: {str(e)}", "danger")
+        accounts = []
+
+    conn.close()
+    return render_template("accounts.html", accounts=accounts, search_term=search_term, account_type=account_type)
+
+
+@app.route("/api/accounts", methods=["GET"])
+def api_accounts() -> Tuple[Any, int]:
+    """
+    REST API endpoint for accounts lookup with filter options.
+
+    VULNERABILITY NOTE (FOR CODEMENDER DEMO):
+    Contains CWE-89 (SQL Injection) in REST API query string formatting.
+
+    Parameters:
+        None (Reads query parameter 'search')
+
+    Returns:
+        Tuple[Response, int]: JSON list of matching accounts and HTTP status code.
+    """
+    search_query = request.args.get("search", "")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Intentional CWE-89 Vulnerability in REST API
+    sql = f"SELECT account_number, customer_name, account_type, balance, status FROM accounts WHERE is_confidential = 0 AND customer_name LIKE '%{search_query}%'"
+    try:
+        cursor.execute(sql)
+        rows = [dict(row) for row in cursor.fetchall()]
+        return jsonify({"count": len(rows), "accounts": rows}), 200
+    except sqlite3.Error as e:
+        return jsonify({"error": str(e), "executed_query": sql}), 500
+    finally:
         conn.close()
 
-        users = [{"id": r[0], "username": r[1], "email": r[2], "role": r[3]} for r in rows]
-        is_exploit = ("OR" in username.upper() or "1=1" in username or "'='") and len(users) > 1
 
-    return render_template_string(HTML_TEMPLATE, username=username, users=users, is_exploit=is_exploit)
+@app.route("/transfer", methods=["GET", "POST"])
+def transfer_view() -> Union[str, Any]:
+    """
+    Render wire transfer dispatch page and process outbound payments.
 
+    Parameters:
+        None (Reads POST form data: sender, recipient, iban, amount, currency)
 
-@app.route("/api/user", methods=["GET"])
-def get_user():
-    """REST API endpoint for user search (demonstrates SQL Injection)."""
-    username = request.args.get("username", "")
-    if not username:
-        return jsonify({"error": "Missing 'username' parameter"}), 400
-
-    conn = sqlite3.connect(DB_FILE)
+    Returns:
+        Union[str, Response]: Rendered template on GET, redirect on successful POST.
+    """
+    conn = get_db_connection()
     cursor = conn.cursor()
 
-    # VULNERABLE: Direct string interpolation into raw SQL query
-    query = f"SELECT id, username, email, role FROM users WHERE username = '{username}'"
-    cursor.execute(query)
-    rows = cursor.fetchall()
+    if request.method == "POST":
+        sender_acc = request.form.get("sender_account", "").strip()
+        recipient_name = request.form.get("recipient_name", "").strip()
+        recipient_iban = request.form.get("recipient_iban", "").strip()
+        amount_str = request.form.get("amount", "0").strip()
+        currency = request.form.get("currency", "USD").strip()
+
+        try:
+            amount = float(amount_str)
+            if amount <= 0:
+                raise ValueError("Amount must be positive.")
+
+            # Generate synthetic wire transfer reference
+            ref_id = f"WT-{os.urandom(3).hex().upper()}"
+
+            cursor.execute("""
+            INSERT INTO wire_transfers (reference_id, sender_account, recipient_name, recipient_iban, amount, currency, status)
+            VALUES (?, ?, ?, ?, ?, ?, 'COMPLETED')
+            """, (ref_id, sender_acc, recipient_name, recipient_iban, amount, currency))
+
+            # Deduct balance from sender account
+            cursor.execute("UPDATE accounts SET balance = balance - ? WHERE account_number = ?", (amount, sender_acc))
+            conn.commit()
+
+            flash(f"Wire transfer {ref_id} of {currency} {amount:,.2f} to {recipient_name} successfully dispatched!", "success")
+            return redirect(url_for("transfer_view"))
+        except ValueError as val_err:
+            flash(f"Invalid transfer parameter: {str(val_err)}", "warning")
+        except sqlite3.Error as db_err:
+            flash(f"Database error recording transfer: {str(db_err)}", "danger")
+
+    # Fetch available source accounts for dropdown
+    cursor.execute("SELECT account_number, customer_name, balance FROM accounts WHERE is_confidential = 0")
+    source_accounts = cursor.fetchall()
+
+    cursor.execute("SELECT * FROM wire_transfers ORDER BY id DESC LIMIT 10")
+    transfers = cursor.fetchall()
     conn.close()
 
-    users = [{"id": r[0], "username": r[1], "email": r[2], "role": r[3]} for r in rows]
-    return jsonify({"count": len(users), "users": users, "query": query}), 200
+    return render_template("transfer.html", source_accounts=source_accounts, transfers=transfers)
+
+
+@app.route("/system-diagnostics", methods=["GET", "POST"])
+def diagnostics_view() -> str:
+    """
+    Render banking infrastructure gateway diagnostics tool.
+
+    VULNERABILITY NOTE (FOR CODEMENDER DEMO):
+    Contains CWE-78 (OS Command Injection).
+    The host parameter is directly concatenated into a shell command and executed using shell=True.
+    An attacker can append shell operators (e.g., '; id', '| whoami', '& cat /etc/passwd')
+    to gain remote code execution on the underlying host or container.
+
+    Parameters:
+        None (Reads POST form data: host)
+
+    Returns:
+        str: Rendered HTML template displaying ping diagnostics results.
+    """
+    command_output = ""
+    target_host = "127.0.0.1"
+
+    if request.method == "POST":
+        target_host = request.form.get("host", "127.0.0.1").strip()
+
+        # Intentional CWE-78 Vulnerability:
+        # String concatenation directly into shell=True invocation
+        cmd = f"ping -c 2 {target_host}"
+        logger.warning("Executing system diagnostic command: %s", cmd)
+
+        try:
+            # shell=True combined with unescaped input triggers command injection
+            proc = subprocess.run(
+                cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            command_output = proc.stdout if proc.stdout else proc.stderr
+        except subprocess.TimeoutExpired:
+            command_output = "Diagnostic execution timed out after 10 seconds."
+        except Exception as e:
+            command_output = f"Execution error: {str(e)}"
+
+    return render_template("diagnostics.html", output=command_output, target_host=target_host)
+
+
+@app.route("/api/ping", methods=["GET"])
+def api_ping() -> Tuple[Any, int]:
+    """
+    REST API endpoint for automated banking gateway connectivity probes.
+
+    VULNERABILITY NOTE (FOR CODEMENDER DEMO):
+    Contains CWE-78 (OS Command Injection) via request query parameters.
+
+    Parameters:
+        None (Reads query parameter 'host')
+
+    Returns:
+        Tuple[Response, int]: JSON response with command output and status code.
+    """
+    host = request.args.get("host", "127.0.0.1")
+
+    # Intentional CWE-78 Command Injection in API
+    cmd = f"ping -c 1 {host}"
+    try:
+        output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT, text=True, timeout=5)
+        return jsonify({"host": host, "status": "REACHABLE", "output": output}), 200
+    except subprocess.CalledProcessError as e:
+        return jsonify({"host": host, "status": "UNREACHABLE", "output": e.output}), 502
+    except subprocess.TimeoutExpired:
+        return jsonify({"host": host, "status": "TIMEOUT", "output": "Probe timed out"}), 504
+
+
+@app.route("/healthz")
+def healthz() -> Tuple[Any, int]:
+    """
+    Standard liveness and readiness probe endpoint for Cloud Run and GKE.
+
+    Parameters:
+        None
+
+    Returns:
+        Tuple[Response, int]: Health status JSON and HTTP 200 code.
+    """
+    return jsonify({"status": "HEALTHY", "service": "apexfin-banking-portal"}), 200
 
 
 if __name__ == "__main__":
-    init_db()
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    port = int(os.getenv("PORT", "5000"))
+    host = os.getenv("HOST", "0.0.0.0")
+    debug_mode = os.getenv("FLASK_DEBUG", "0") == "1"
+    logger.info("Starting ApexFin Banking Portal on %s:%d (debug=%s)", host, port, debug_mode)
+    app.run(host=host, port=port, debug=debug_mode)

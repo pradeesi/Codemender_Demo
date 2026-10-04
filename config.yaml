@@ -1,0 +1,35 @@
+# Purpose: CodeMender agent configuration file for the ApexFin Banking Portal repository.
+# Architecture/Context: Repository-level governance and verification policy for CodeMender AI agent.
+# Dependencies/Side Effects: Loaded by 'cm find', 'cm verify', and 'cm fix' commands.
+
+scan:
+  extensions:
+    include:
+      - .py
+      - .html
+      - .js
+      - .sql
+    exclude:
+      - .min.js
+      - .pb.go
+  exclude_dirs:
+    - .venv
+    - venv
+    - __pycache__
+    - .git
+
+# Build and verification command executed in sandbox to validate generated patches
+build:
+  command: "python3 -m unittest test_app.py"
+
+vcs:
+  type: "git"
+
+tools:
+  confirm_commands: true
+  confirm_writes: true
+
+sandbox:
+  enabled: true
+  network:
+    profile: "permissive-closed"

@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - ApexFin Global Bank{% endblock %}
+
+{% block content %}
+<!--
+Purpose: Main banking portal dashboard template.
+Architecture/Context: Primary landing page displaying key metrics, recent wire activity, and CE demo scenarios.
+Dependencies/Side Effects: Inherits from base.html.
+-->
+
+<div class="row mb-4 align-items-center">
+    <div class="col-md-8">
+        <h2 class="fw-bold text-dark mb-1">Commercial Banking &amp; Treasury Operations</h2>
+        <p class="text-secondary mb-0">Real-time asset tracking, corporate clearing, and banking gateway infrastructure.</p>
+    </div>
+    <div class="col-md-4 text-md-end mt-3 mt-md-0">
+        <span class="badge bg-success-subtle text-success border border-success px-3 py-2">
+            <i class="bi bi-shield-check me-1"></i> Core Banking Engine Online
+        </span>
+    </div>
+</div>
+
+<!-- Overview Stats Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-secondary small fw-semibold text-uppercase">Public Managed Assets</span>
+                    <span class="badge bg-primary-subtle text-primary p-2 rounded-circle"><i class="bi bi-cash-stack"></i></span>
+                </div>
+                <h3 class="fw-bold mb-1">${{ "{:,.2f}".format(stats.total_assets if stats and stats.total_assets else 0) }}</h3>
+                <span class="text-muted small"><i class="bi bi-graph-up-arrow text-success me-1"></i>Liquid Treasury Reserve</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-secondary small fw-semibold text-uppercase">Commercial Accounts</span>
+                    <span class="badge bg-info-subtle text-info p-2 rounded-circle"><i class="bi bi-people-fill"></i></span>
+                </div>
+                <h3 class="fw-bold mb-1">{{ stats.total_accounts if stats else 0 }} Active</h3>
+                <span class="text-muted small">Standard KYC Verified</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-secondary small fw-semibold text-uppercase">SWIFT Gateway</span>
+                    <span class="badge bg-success-subtle text-success p-2 rounded-circle"><i class="bi bi-router-fill"></i></span>
+                </div>
+                <h3 class="fw-bold mb-1">Connected</h3>
+                <span class="text-success small"><i class="bi bi-check2-circle me-1"></i>Avg Latency 14ms</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-secondary small fw-semibold text-uppercase">Security Posture</span>
+                    <span class="badge bg-danger-subtle text-danger p-2 rounded-circle"><i class="bi bi-shield-slash"></i></span>
+                </div>
+                <h3 class="fw-bold text-danger mb-1">2 Vulnerabilities</h3>
+                <span class="text-danger small">Demo target for CodeMender</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CodeMender Demo Interactive Jump Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card border-primary shadow-sm h-100">
+            <div class="card-header bg-primary-subtle text-primary border-primary d-flex justify-content-between align-items-center">
+                <span class="fw-bold"><i class="bi bi-database-fill-slash me-2"></i>Demo Scenario 1: SQL Injection (CWE-89)</span>
+                <span class="badge bg-danger">Critical</span>
+            </div>
+            <div class="card-body">
+                <h5 class="card-title fw-bold">Customer Accounts Registry &amp; Filtering</h5>
+                <p class="card-text text-secondary small">
+                    The search query uses raw string interpolation in SQLite queries. An attacker can break query bounds to dump confidential offshore accounts, bypass authorization, and exfiltrate multi-million dollar reserves.
+                </p>
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <a href="{{ url_for('accounts_view') }}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-box-arrow-up-right me-1"></i> Open Accounts View
+                    </a>
+                    <span class="font-monospace small text-muted">app.py: accounts_view()</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card border-danger shadow-sm h-100">
+            <div class="card-header bg-danger-subtle text-danger border-danger d-flex justify-content-between align-items-center">
+                <span class="fw-bold"><i class="bi bi-terminal-x me-2"></i>Demo Scenario 2: OS Command Injection (CWE-78)</span>
+                <span class="badge bg-danger">Critical</span>
+            </div>
+            <div class="card-body">
+                <h5 class="card-title fw-bold">Banking Network Gateway Ping Diagnostic</h5>
+                <p class="card-text text-secondary small">
+                    Network gateway ping diagnostic invokes shell execution (<code>shell=True</code>) without argument sanitization. An attacker can append arbitrary shell commands to take over the hosting server or container.
+                </p>
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <a href="{{ url_for('diagnostics_view') }}" class="btn btn-outline-danger btn-sm">
+                        <i class="bi bi-box-arrow-up-right me-1"></i> Open Diagnostics View
+                    </a>
+                    <span class="font-monospace small text-muted">app.py: diagnostics_view()</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Transactions Table -->
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold text-dark"><i class="bi bi-clock-history text-primary me-2"></i>Recent Outbound Wire Transfers</h5>
+        <a href="{{ url_for('transfer_view') }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-circle me-1"></i> New Wire Transfer
+        </a>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light text-secondary small text-uppercase">
+                <tr>
+                    <th>Ref ID</th>
+                    <th>Sender Account</th>
+                    <th>Recipient</th>
+                    <th>IBAN / Routing</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Settlement Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for wire in recent_wires %}
+                <tr>
+                    <td class="font-monospace fw-semibold text-primary">{{ wire.reference_id }}</td>
+                    <td><span class="badge bg-secondary-subtle text-secondary">{{ wire.sender_account }}</span></td>
+                    <td class="fw-medium">{{ wire.recipient_name }}</td>
+                    <td class="font-monospace small text-muted">{{ wire.recipient_iban }}</td>
+                    <td class="fw-bold text-dark">{{ wire.currency }} ${{ "{:,.2f}".format(wire.amount) }}</td>
+                    <td><span class="badge bg-success"><i class="bi bi-check2"></i> {{ wire.status }}</span></td>
+                    <td class="text-secondary small">{{ wire.timestamp }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-4">No wire transfers found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

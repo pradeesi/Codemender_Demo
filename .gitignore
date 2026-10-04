@@ -1,8 +1,48 @@
+# Purpose: Gitignore configuration for the ApexFin Bank CodeMender demo project.
+# Architecture/Context: Root-level Git filter for security and build artifact isolation.
+# Dependencies/Side Effects: Prevents secrets, environment configurations, and virtual environments from being tracked.
+
+# Python compiled bytecode and caches
 __pycache__/
 *.py[cod]
 *$py.class
-demo.db
-.env
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual Environments
+venv/
 .venv/
+env/
+.env/
+ENV/
+
+# Sensitive Environment Configurations & Secrets
+.env
+.env.local
+*.pem
+*.key
+*.cert
+*.crt
+*service-account*.json
+credentials.json
+
+# Local SQLite databases (created dynamically via database.py)
+*.db
+*.sqlite3
+.app.pid
+
+# Operating System & IDE noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# CodeMender local execution state and artifacts
+.codemender/
 .cm_project
 *.log
+logs/

