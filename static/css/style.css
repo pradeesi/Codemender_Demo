@@ -47,3 +47,22 @@ pre {
         opacity: 0.4;
     }
 }
+
+/* Form Controls & Inputs */
+.form-control, .form-select {
+    color: #1e293b;
+    background-color: #ffffff;
+}
+
+/* Faint, distinct placeholder styling so it is never mistaken for real text */
+.form-control::placeholder {
+    color: #94a3b8 !important;
+    opacity: 0.65 !important;
+}
+
+/* Instantly clear placeholder on focus so the input is completely empty for user input */
+.form-control:focus::placeholder {
+    color: transparent !important;
+    opacity: 0 !important;
+}
+

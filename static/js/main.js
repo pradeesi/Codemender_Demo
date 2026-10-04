@@ -29,4 +29,14 @@ document.addEventListener("DOMContentLoaded", () => {
             runBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Pinging Gateway...';
         });
     }
+
+    // Enhance search input usability and auto-select existing content on focus
+    const searchInput = document.getElementById("searchInput");
+    if (searchInput) {
+        searchInput.addEventListener("focus", function() {
+            if (this.value) {
+                this.select();
+            }
+        });
+    }
 });
