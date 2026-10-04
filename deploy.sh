@@ -20,15 +20,71 @@ echo "============================================================"
 echo "🏦 ApexFin Global Bank - Automated Deployment"
 echo "============================================================"
 
-# Handle optional Cloud Run deployment
-if [[ "${1:-}" == "--cloud-run" ]]; then
-    PROJECT_ID="${GOOGLE_CLOUD_PROJECT:-$(gcloud config get-value project 2>/dev/null || echo '')}"
+MODE="local"
+PROJECT_ID="${GOOGLE_CLOUD_PROJECT:-${PROJECT_ID:-}}"
+REGION="${REGION:-us-central1}"
+SERVICE_NAME="apexfin-banking-portal"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --cloud-run|--run)
+            MODE="cloud-run"
+            shift
+            ;;
+        --vm)
+            MODE="vm"
+            shift
+            ;;
+        --local)
+            MODE="local"
+            shift
+            ;;
+        --project|-p)
+            PROJECT_ID="$2"
+            MODE="cloud-run"
+            shift 2
+            ;;
+        --region|-r)
+            REGION="$2"
+            shift 2
+            ;;
+        -*)
+            echo "❌ Unknown option: $1"
+            echo "Usage: ./deploy.sh [--cloud-run | --vm | --local] [--project <PROJECT_ID>] [--region <REGION>]"
+            exit 1
+            ;;
+        *)
+            if [[ -z "$PROJECT_ID" ]]; then
+                PROJECT_ID="$1"
+                MODE="cloud-run"
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Delegate to VM provisioning if requested
+if [[ "$MODE" == "vm" ]]; then
+    echo "🖥️ Delegating deployment to isolated Compute Engine VM..."
+    PROJECT_ID="$PROJECT_ID" REGION="$REGION" exec ./provision_vm.sh
+fi
+
+# Handle Cloud Run deployment
+if [[ "$MODE" == "cloud-run" ]]; then
+    DEFAULT_PROJECT="$(gcloud config get-value project 2>/dev/null || echo '')"
     if [[ -z "$PROJECT_ID" ]]; then
-        echo "❌ Error: Google Cloud Project ID not set. Set GOOGLE_CLOUD_PROJECT or run 'gcloud config set project <ID>'."
+        if [[ -n "$DEFAULT_PROJECT" ]]; then
+            read -r -p "Enter Google Cloud Project ID [$DEFAULT_PROJECT]: " USER_INPUT
+            PROJECT_ID="${USER_INPUT:-$DEFAULT_PROJECT}"
+        else
+            read -r -p "Enter Google Cloud Project ID: " PROJECT_ID
+        fi
+    fi
+
+    if [[ -z "$PROJECT_ID" ]]; then
+        echo "❌ Error: Google Cloud Project ID is required for Cloud Run deployment."
         exit 1
     fi
-    REGION="${REGION:-us-central1}"
-    SERVICE_NAME="apexfin-banking-portal"
 
     echo "🚀 Deploying to Google Cloud Run in project: $PROJECT_ID ($REGION)..."
     gcloud run deploy "$SERVICE_NAME" \
@@ -37,8 +93,19 @@ if [[ "${1:-}" == "--cloud-run" ]]; then
         --region "$REGION" \
         --platform managed \
         --allow-unauthenticated \
-        --port 5000
-    echo "✅ Cloud Run deployment complete."
+        --port 5000 \
+        --quiet
+
+    SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --project "$PROJECT_ID" --region "$REGION" --format="value(status.url)")
+
+    echo ""
+    echo "============================================================"
+    echo "✅ Cloud Run deployment complete!"
+    echo "🌐 Public Web UI URL: $SERVICE_URL"
+    echo "============================================================"
+    echo "💡 To deprovision or delete the Cloud Run service, run:"
+    echo "   gcloud run services delete $SERVICE_NAME --project $PROJECT_ID --region $REGION --quiet"
+    echo "============================================================"
     exit 0
 fi
 

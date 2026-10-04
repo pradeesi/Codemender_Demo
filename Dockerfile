@@ -31,4 +31,4 @@ ENV PORT=5000 \
 EXPOSE 5000
 
 # Run with Gunicorn WSGI server for production resilience
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--threads", "4", "--timeout", "60", "app:app"]
+CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:${PORT:-5000} --workers 2 --threads 4 --timeout 60 app:app"]

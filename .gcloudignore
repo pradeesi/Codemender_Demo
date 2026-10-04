@@ -1,0 +1,11 @@
+.gcloudignore
+.git
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.app.pid
+app.log
+apexfin.db
+.env
