@@ -22,7 +22,8 @@ echo "============================================================"
 
 MODE=""
 PROJECT_ID="${GOOGLE_CLOUD_PROJECT:-${PROJECT_ID:-}}"
-REGION="${REGION:-us-central1}"
+ZONE_FLAG=""
+REGION_FLAG=""
 SERVICE_NAME="apexfin-banking-portal"
 
 while [[ $# -gt 0 ]]; do
@@ -44,12 +45,16 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --region|-r)
-            REGION="$2"
+            REGION_FLAG="$2"
+            shift 2
+            ;;
+        --zone|-z)
+            ZONE_FLAG="$2"
             shift 2
             ;;
         -*)
             echo "❌ Unknown option: $1"
-            echo "Usage: ./deploy.sh [--vm | --cloud-run | --local] [--project <PROJECT_ID>] [--region <REGION>]"
+            echo "Usage: ./deploy.sh [--vm | --cloud-run | --local] [--project <PROJECT_ID>] [--region <REGION>] [--zone <ZONE>]"
             exit 1
             ;;
         *)
@@ -60,6 +65,30 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Resolve region and zone hierarchy
+if [[ -n "$REGION_FLAG" ]]; then
+    REGION="$REGION_FLAG"
+    if [[ "${REGION,,}" =~ ^(belgium|europe-west1)$ ]]; then
+        REGION="europe-west1"
+    fi
+    if [[ -z "$ZONE_FLAG" ]]; then
+        ZONE="${REGION}-b"
+    else
+        ZONE="$ZONE_FLAG"
+    fi
+elif [[ -n "$ZONE_FLAG" ]]; then
+    ZONE="$ZONE_FLAG"
+    REGION="${ZONE%-*}"
+else
+    REGION="${REGION:-us-central1}"
+    if [[ "${REGION,,}" =~ ^(belgium|europe-west1)$ ]]; then
+        REGION="europe-west1"
+    fi
+    if [[ -z "${ZONE:-}" || "${ZONE}" != "${REGION}"* ]]; then
+        ZONE="${REGION}-b"
+    fi
+fi
 
 # If project ID is provided or GCP environment is present, default to isolated VM
 if [[ -z "$MODE" ]]; then
@@ -73,7 +102,7 @@ fi
 # Delegate to VM provisioning (default for GCP deployments)
 if [[ "$MODE" == "vm" ]]; then
     echo "🖥️ Deploying application to isolated Google Compute Engine Linux VM..."
-    PROJECT_ID="$PROJECT_ID" REGION="$REGION" exec ./provision_vm.sh
+    PROJECT_ID="$PROJECT_ID" REGION="$REGION" ZONE="$ZONE" exec ./provision_vm.sh
 fi
 
 # Handle Cloud Run deployment

@@ -54,6 +54,16 @@ if [[ -z "$PROJECT_ID" ]]; then
     exit 1
 fi
 
+# Normalize Region and Zone
+if [[ -n "${REGION:-}" ]]; then
+    if [[ "${REGION,,}" =~ ^(belgium|europe-west1)$ ]]; then
+        REGION="europe-west1"
+    fi
+    if [[ -z "${ZONE:-}" || "${ZONE}" != "${REGION}"* ]]; then
+        ZONE="${REGION}-b"
+    fi
+fi
+
 if [[ -z "${ZONE:-}" ]]; then
     if [[ -t 0 ]]; then
         echo ""
