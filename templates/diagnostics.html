@@ -5,7 +5,7 @@
 {% block content %}
 <!--
 Purpose: Banking network latency and diagnostic ping tool template.
-Architecture/Context: Frontend view vulnerable to CWE-78 (OS Command Injection).
+Architecture/Context: Interbank clearing connectivity health monitor.
 Dependencies/Side Effects: Interacts with /system-diagnostics endpoint.
 -->
 
@@ -14,9 +14,11 @@ Dependencies/Side Effects: Interacts with /system-diagnostics endpoint.
         <h3 class="fw-bold text-dark mb-1">Banking Gateway &amp; SWIFT Diagnostics</h3>
         <p class="text-secondary small mb-0">Operational utility to test latency and reachability to interbank clearing endpoints.</p>
     </div>
-    <span class="badge bg-danger-subtle text-danger border border-danger px-3 py-2">
-        <i class="bi bi-exclamation-triangle-fill me-1"></i> Target: Command Injection (CWE-78)
-    </span>
+    <div>
+        <span class="badge bg-light text-secondary border px-3 py-2">
+            <i class="bi bi-broadcast me-1"></i> Protocol: ICMP Echo
+        </span>
+    </div>
 </div>
 
 <!-- Diagnostics Form -->
@@ -30,32 +32,15 @@ Dependencies/Side Effects: Interacts with /system-diagnostics endpoint.
                         <span class="input-group-text bg-white"><i class="bi bi-hdd-network text-muted"></i></span>
                         <input type="text" class="form-control font-monospace" name="host" id="hostInput" value="{{ target_host }}" placeholder="e.g. 127.0.0.1, 8.8.8.8, swift-gw.apexfin.internal" required>
                     </div>
-                    <div class="form-text">System executes a 2-packet ICMP probe to verify gateway connectivity.</div>
+                    <div class="form-text">System executes an ICMP probe to verify gateway connectivity and measure round-trip time.</div>
                 </div>
                 <div class="col-md-3 d-flex align-items-end">
-                    <button type="submit" class="btn btn-danger w-100 py-2" id="runDiagnosticBtn">
+                    <button type="submit" class="btn btn-primary w-100 py-2" id="runDiagnosticBtn">
                         <i class="bi bi-play-circle-fill me-1"></i> Run Diagnostic Probe
                     </button>
                 </div>
             </div>
         </form>
-
-        <!-- 1-Click Exploit Buttons for Live Customer Presentations -->
-        <div class="mt-3 pt-3 border-top d-flex flex-wrap align-items-center gap-2">
-            <span class="text-secondary small fw-bold"><i class="bi bi-magic me-1"></i>1-Click Demo Payloads:</span>
-            <button type="button" class="btn btn-outline-danger btn-sm diag-exploit-btn" data-payload="127.0.0.1; whoami; id">
-                <i class="bi bi-person-badge me-1"></i> Privilege Probe: <code>; whoami; id</code>
-            </button>
-            <button type="button" class="btn btn-outline-dark btn-sm diag-exploit-btn" data-payload="127.0.0.1; uname -a; cat /etc/os-release | head -n 3">
-                <i class="bi bi-cpu me-1"></i> OS Fingerprint: <code>; uname -a; ...</code>
-            </button>
-            <button type="button" class="btn btn-outline-primary btn-sm diag-exploit-btn" data-payload="127.0.0.1; ls -la /tmp">
-                <i class="bi bi-folder2-open me-1"></i> Directory Listing: <code>; ls -la /tmp</code>
-            </button>
-            <button type="button" class="btn btn-outline-secondary btn-sm diag-exploit-btn" data-payload="127.0.0.1">
-                <i class="bi bi-arrow-counterclockwise me-1"></i> Reset to 127.0.0.1
-            </button>
-        </div>
     </div>
 </div>
 
@@ -65,30 +50,12 @@ Dependencies/Side Effects: Interacts with /system-diagnostics endpoint.
         <span class="font-monospace small"><i class="bi bi-terminal me-2 text-warning"></i>Console Output Stream</span>
         <span class="badge bg-secondary font-monospace" style="font-size: 0.7rem;">STDOUT / STDERR</span>
     </div>
-    <div class="card-body bg-black p-3">
+    <div class="card-body bg-black p-3 rounded-bottom">
         {% if output %}
         <pre class="text-success font-monospace mb-0" style="white-space: pre-wrap; font-size: 0.9rem;">{{ output }}</pre>
         {% else %}
         <pre class="text-muted font-monospace mb-0" style="font-size: 0.85rem;">[Awaiting diagnostic probe execution...]</pre>
         {% endif %}
-    </div>
-</div>
-
-<!-- CodeMender Exploit Insight Panel -->
-<div class="card border-warning shadow-sm bg-light">
-    <div class="card-body">
-        <h6 class="fw-bold text-dark"><i class="bi bi-lightbulb-fill text-warning me-2"></i>How CodeMender Solves This</h6>
-        <p class="small text-secondary mb-2">
-            <strong>The Vulnerability:</strong> In <code>app.py: diagnostics_view()</code>, user input from <code>request.form.get("host")</code> is passed directly into a shell command using <code>subprocess.run(cmd, shell=True)</code>:
-        </p>
-        <pre class="bg-dark text-white p-2 rounded small mb-2"><code>cmd = f"ping -c 2 {target_host}"
-proc = subprocess.run(cmd, shell=True, capture_output=True, text=True)</code></pre>
-        <p class="small text-secondary mb-0">
-            <strong>CodeMender Workflow:</strong>
-            <code>cm find</code> flags CWE-78 command injection because <code>shell=True</code> is invoked with untrusted variables.
-            <code>cm verify</code> executes a proof-of-concept payload inside CodeMender's isolated OS sandbox (`exebox`) to confirm execution without touching host assets.
-            <code>cm fix</code> replaces <code>shell=True</code> with argument array execution (e.g. <code>subprocess.run(["ping", "-c", "2", target_host], shell=False)</code>) and adds defensive IP/hostname regex validation, ensuring malicious shell operators like <code>;</code> or <code>|</code> are never interpreted by the system shell.
-        </p>
     </div>
 </div>
 {% endblock %}

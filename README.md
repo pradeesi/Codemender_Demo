@@ -34,7 +34,7 @@ This demo application simulates **ApexFin Global Bank**, a financial services po
 
 ## Frontend UI Exploit Walkthrough (CE Demo Playbook)
 
-During your presentation with customer CISOs, AppSec Directors, and Lead Architects, use the live web interface to demonstrate the business impact before running CodeMender.
+During your presentation with customer CISOs, AppSec Directors, and Lead Architects, use the realistic, clean web interface to demonstrate vulnerability impact, then fix the code via CodeMender on the VM shell, and finally return to the UI to verify remediation.
 
 ### Vulnerability 1: SQL Injection (CWE-89) &mdash; Classified Account Exfiltration
 
@@ -42,24 +42,22 @@ During your presentation with customer CISOs, AppSec Directors, and Lead Archite
 * **Vulnerable Source**: [`app.py`](app.py) &rarr; `accounts_view()` and `api_accounts()`
 * **Business Risk**: Unauthenticated or low-privilege users can bypass confidentiality flags, exfiltrating secret offshore reserve accounts and SWIFT Nostro settlement balances totaling over **$960,000,000**.
 
-#### Exploitation Steps from the Web UI:
-1. Open your browser and navigate to the application dashboard: [http://localhost:5000](http://localhost:5000).
-2. Click **Customer Accounts** in the top navigation bar (or visit [http://localhost:5000/accounts](http://localhost:5000/accounts)).
-3. Notice that standard search displays 4 public commercial accounts (Alice Johnson, Bob Vance, Carol Danvers, David Miller).
-4. In the **Search** input field, input the following SQL injection payload:
+#### Step-by-Step UI Demonstration:
+1. Open your browser and navigate to the application dashboard: [http://localhost:5000](http://localhost:5000) (or your VM's public IP / Cloud Shell URL).
+2. Click **Customer Accounts** in the top navigation bar.
+3. Notice that normal searches (e.g. searching for `Alice` or `Checking`) return only authorized commercial accounts.
+4. Now, enter the SQL injection payload directly into the **Search** input box:
    ```sql
-   ' OR '1'='1
+   ' OR 1=1 --
    ```
-   *(Or click the 1-click demo button **`Basic SQLi: ' OR '1'='1`**)*.
 5. Click **Search**.
-6. **Observed Impact**: The query bounds are broken. Notice the red rows with the badge **`CLASSIFIED EXPOSED!`**:
-   * `ACC-99999` &mdash; Executive Confidential Reserve: **$48,500,000.00**
-   * `ACC-88888` &mdash; SWIFT Nostro Settlement: **$912,000,000.00**
-7. For advanced exfiltration, click the button **`Expose Classified Vault (UNION SELECT)`** with the payload:
+6. **Observed Impact**: The query condition breaks out of the intended customer filter. The confidential multi-million dollar banking reserves are exposed in the accounts table:
+   * `ACC-99999` &mdash; *Executive Confidential Reserve* &mdash; **$48,500,000.00** (Restricted)
+   * `ACC-88888` &mdash; *SWIFT Nostro Settlement* &mdash; **$912,000,000.00** (Restricted)
+7. *(Optional Advanced Query)*: Enter a UNION SELECT payload:
    ```sql
    ' UNION SELECT id, account_number, customer_name, email, account_type, balance, status, is_confidential FROM accounts WHERE is_confidential=1 --
    ```
-   This demonstrates precision SQL manipulation to bypass all business logic filters.
 
 ---
 
@@ -69,21 +67,19 @@ During your presentation with customer CISOs, AppSec Directors, and Lead Archite
 * **Vulnerable Source**: [`app.py`](app.py) &rarr; `diagnostics_view()` and `api_ping()`
 * **Business Risk**: Remote Code Execution (RCE). An attacker with access to the diagnostics portal can execute arbitrary shell commands under the web server's host/container process privileges.
 
-#### Exploitation Steps from the Web UI:
-1. From the top navigation bar, click **Gateway Diagnostics** (or visit [http://localhost:5000/system-diagnostics](http://localhost:5000/system-diagnostics)).
-2. Under normal usage, entering `127.0.0.1` runs an ICMP probe (`ping -c 2 127.0.0.1`) and displays standard round-trip times in the console output window.
-3. Now, demonstrate command injection by chaining shell operators. In the **Target Host** input, enter:
+#### Step-by-Step UI Demonstration:
+1. From the top navigation bar, click **Gateway Diagnostics**.
+2. Normal usage: Entering `127.0.0.1` executes an ICMP ping probe (`ping -c 2 127.0.0.1`) and displays standard network latency.
+3. Now, demonstrate command injection by chaining shell operators in the **Target Host** input box:
    ```bash
    127.0.0.1; whoami; id; uname -a
    ```
-   *(Or click the 1-click demo button **`Privilege Probe: ; whoami; id`**)*.
 4. Click **Run Diagnostic Probe**.
-5. **Observed Impact**: The dark console output window renders the output of `whoami`, `id`, and system kernel telemetry directly below the ping output.
+5. **Observed Impact**: The dark console output stream renders the output of `whoami`, `id`, and system kernel telemetry directly below the ping statistics.
 6. Now demonstrate arbitrary file read on host assets:
    ```bash
    127.0.0.1; cat /etc/passwd | head -n 5
    ```
-   *(Or click **`Directory Listing: ; ls -la /tmp`**)*.
 7. Point out to the customer: If this service were running in Kubernetes or a production VM, the attacker could dump environment variables, exfiltrate Google Cloud Service Account tokens from metadata endpoints, and achieve full lateral movement.
 
 ---
@@ -170,6 +166,22 @@ Inspect the resulting diff:
 ```bash
 cm vcs diff
 ```
+
+---
+
+### Phase 4: Re-testing from the Web UI (Verification of Fix)
+
+After CodeMender generates and applies the verified patches in `/opt/apexfin`:
+
+1. **Automatic Reload**: The application service running on the VM immediately reloads the updated code (or run `sudo systemctl restart apexfin.service` if needed).
+2. **Re-test SQL Injection on Customer Accounts**:
+   * Navigate back to **Customer Accounts** in your browser.
+   * Enter `' OR 1=1 --` into the **Search** field and click **Search**.
+   * **Observed Result**: The exploit is neutralized. SQLite executes the query using parameterized bindings, treating the entire payload as a literal string. The confidential offshore accounts remain completely protected and hidden.
+3. **Re-test Command Injection on Gateway Diagnostics**:
+   * Navigate back to **Gateway Diagnostics** in your browser.
+   * Enter `127.0.0.1; whoami; id` into the **Target Host** field and click **Run Diagnostic Probe**.
+   * **Observed Result**: The shell metacharacters (`;`) are no longer interpreted by an OS shell. The system executes the ping binary safely without executing `whoami` or `id`.
 
 ---
 

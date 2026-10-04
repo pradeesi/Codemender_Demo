@@ -186,14 +186,21 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     iputils-ping
 
 echo "=== [2/6] Installing CodeMender CLI ('cm') ==="
-curl -L -o /tmp/cm-linux-amd64.zip "https://artifactregistry.googleapis.com/download/v1/projects/cmoc-prod/locations/us/repositories/codemender-cli-production/files/cm%3Astable%3Acm-linux-amd64.zip:download?alt=media" || true
+METADATA_TOKEN=\$(curl -s -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" 2>/dev/null | grep -o '"access_token":"[^"]*' | cut -d'"' -f4 || echo '')
+if [[ -n "\$METADATA_TOKEN" ]]; then
+    curl -H "Authorization: Bearer \$METADATA_TOKEN" -L -o /tmp/cm-linux-amd64.zip "https://artifactregistry.googleapis.com/download/v1/projects/cmoc-prod/locations/us/repositories/codemender-cli-production/files/cm%3Astable%3Acm-linux-amd64.zip:download?alt=media" || true
+else
+    curl -L -o /tmp/cm-linux-amd64.zip "https://artifactregistry.googleapis.com/download/v1/projects/cmoc-prod/locations/us/repositories/codemender-cli-production/files/cm%3Astable%3Acm-linux-amd64.zip:download?alt=media" || true
+fi
 
 if [[ -f "/tmp/cm-linux-amd64.zip" ]]; then
-    unzip -q -o /tmp/cm-linux-amd64.zip -d /tmp/cm_bin
-    chmod +x /tmp/cm_bin/cm
-    mv /tmp/cm_bin/cm /usr/local/bin/cm
-    rm -rf /tmp/cm-linux-amd64.zip /tmp/cm_bin
-    echo "CodeMender CLI installed at /usr/local/bin/cm"
+    unzip -q -o /tmp/cm-linux-amd64.zip -d /tmp/cm_bin 2>/dev/null || true
+    if [[ -f "/tmp/cm_bin/cm" ]]; then
+        chmod +x /tmp/cm_bin/cm
+        mv /tmp/cm_bin/cm /usr/local/bin/cm
+        rm -rf /tmp/cm-linux-amd64.zip /tmp/cm_bin
+        echo "CodeMender CLI installed at /usr/local/bin/cm"
+    fi
 fi
 
 echo "=== [3/6] Unpacking ApexFin Banking Application ==="
@@ -236,7 +243,7 @@ Environment="HOST=0.0.0.0"
 Environment="FLASK_ENV=production"
 Environment="FLASK_DEBUG=0"
 Environment="GOOGLE_CLOUD_PROJECT=${PROJECT_ID}"
-ExecStart=/opt/apexfin/.venv/bin/python3 app.py
+ExecStart=/opt/apexfin/.venv/bin/gunicorn --bind 0.0.0.0:5000 --workers 2 --threads 4 --timeout 60 --reload app:app
 Restart=always
 RestartSec=3
 

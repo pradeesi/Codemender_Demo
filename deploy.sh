@@ -20,19 +20,19 @@ echo "============================================================"
 echo "🏦 ApexFin Global Bank - Automated Deployment"
 echo "============================================================"
 
-MODE="local"
+MODE=""
 PROJECT_ID="${GOOGLE_CLOUD_PROJECT:-${PROJECT_ID:-}}"
 REGION="${REGION:-us-central1}"
 SERVICE_NAME="apexfin-banking-portal"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --cloud-run|--run)
-            MODE="cloud-run"
-            shift
-            ;;
         --vm)
             MODE="vm"
+            shift
+            ;;
+        --cloud-run|--run)
+            MODE="cloud-run"
             shift
             ;;
         --local)
@@ -41,7 +41,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --project|-p)
             PROJECT_ID="$2"
-            MODE="cloud-run"
             shift 2
             ;;
         --region|-r)
@@ -50,22 +49,30 @@ while [[ $# -gt 0 ]]; do
             ;;
         -*)
             echo "❌ Unknown option: $1"
-            echo "Usage: ./deploy.sh [--cloud-run | --vm | --local] [--project <PROJECT_ID>] [--region <REGION>]"
+            echo "Usage: ./deploy.sh [--vm | --cloud-run | --local] [--project <PROJECT_ID>] [--region <REGION>]"
             exit 1
             ;;
         *)
             if [[ -z "$PROJECT_ID" ]]; then
                 PROJECT_ID="$1"
-                MODE="cloud-run"
             fi
             shift
             ;;
     esac
 done
 
-# Delegate to VM provisioning if requested
+# If project ID is provided or GCP environment is present, default to isolated VM
+if [[ -z "$MODE" ]]; then
+    if [[ -n "$PROJECT_ID" ]]; then
+        MODE="vm"
+    else
+        MODE="local"
+    fi
+fi
+
+# Delegate to VM provisioning (default for GCP deployments)
 if [[ "$MODE" == "vm" ]]; then
-    echo "🖥️ Delegating deployment to isolated Compute Engine VM..."
+    echo "🖥️ Deploying application to isolated Google Compute Engine Linux VM..."
     PROJECT_ID="$PROJECT_ID" REGION="$REGION" exec ./provision_vm.sh
 fi
 
