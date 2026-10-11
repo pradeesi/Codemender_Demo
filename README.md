@@ -43,13 +43,20 @@ To ensure zero risk to your GCP environment:
 
 ---
 
-### 1. Provision the Isolated Demo VM from GCP Cloud Shell (`./provision_vm.sh`)
+### 1. Clone the Repository in GCP Cloud Shell
 
-Open **GCP Cloud Shell**, navigate to the `CodeMender` directory, and make the scripts executable:
+1. Open **[Google Cloud Shell](https://shell.cloud.google.com/)** in your browser (or click **[Open directly in Cloud Shell](https://shell.cloud.google.com/?cloudshell_git_repo=https://github.com/pradeesi/Codemender_Demo)**).
+2. Clone the repository and navigate into the project directory:
 
 ```bash
+git clone https://github.com/pradeesi/Codemender_Demo.git
+cd Codemender_Demo
 chmod +x provision_vm.sh deprovision_vm.sh reset_demo.sh
 ```
+
+---
+
+### 2. Provision the Isolated Demo VM (`./provision_vm.sh`)
 
 #### Option A: Interactive Project Selection (Default)
 Run the installation script without specifying a project ID:
@@ -119,9 +126,9 @@ Once provisioning completes, the script prints the access commands:
 
 ---
 
-### 2. Uninstall & Deprovision Demo Resources from GCP Cloud Shell (`./deprovision_vm.sh`)
+### 3. Uninstall & Deprovision Demo Resources from GCP Cloud Shell (`./deprovision_vm.sh`)
 
-After completing your customer demo, run the uninstallation script from **GCP Cloud Shell** to remove all demo resources:
+After completing your customer demo, run the uninstallation script from **GCP Cloud Shell** (inside the `Codemender_Demo` directory) to remove all demo resources:
 
 #### Option A: Interactive Project Selection (Default)
 ```bash
