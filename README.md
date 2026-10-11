@@ -164,7 +164,10 @@ During your presentation with customer CISOs, AppSec Directors, and Lead Archite
 1. Open the ApexFin portal in your browser (`http://<EXTERNAL_IP>:5000` or via Cloud Shell Web Preview on port `5000`).
 2. Click **Customer Accounts** in the top navigation bar.
 3. Notice that normal searches (e.g. searching for `Alice` or `Checking`) return only authorized commercial accounts.
-4. Click the **Inject SQLi (`' OR 1=1 --`)** quick-fill button (or paste `' OR 1=1 --` into the **Search** input box) and click **Search**.
+4. Copy the SQL injection payload below and paste it into the **Search** input box, then click **Search**:
+   ```sql
+   ' OR 1=1 --
+   ```
 5. **Observed Impact**: The query condition breaks out of the intended customer filter. Confidential multi-million dollar banking reserves are exposed in the accounts table:
    * `ACC-99999` &mdash; *Executive Confidential Reserve* &mdash; **$48,500,000.00** (Restricted)
    * `ACC-88888` &mdash; *SWIFT Nostro Settlement* &mdash; **$912,000,000.00** (Restricted)
@@ -306,7 +309,7 @@ The ApexFin Banking Portal runs inside the isolated Compute Engine Linux VM as a
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                       Client Browser                        │
-│   (Bootstrap 5 UI, Live Exploit Injector, SWIFT Ledger)     │
+│        (Bootstrap 5 Banking Portal UI, SWIFT Ledger)        │
 └──────────────────────────────┬──────────────────────────────┘
                                │ HTTP / JSON (Port 5000)
                                ▼
@@ -343,16 +346,14 @@ CodeMender/
 ├── database.py              # SQLite schema creation and financial sample seed data
 ├── test_app.py              # Regression test suite invoked by CodeMender build.command
 ├── templates/               # Jinja2 HTML templates
-│   ├── base.html            # Master layout with navbar and Exploit Cheat Sheet modal
+│   ├── base.html            # Master banking portal layout with navigation bar and footer
 │   ├── index.html           # Main banking overview dashboard
-│   ├── accounts.html        # Customer account registry (SQL Injection demo)
+│   ├── accounts.html        # Commercial customer account registry
 │   ├── transfer.html        # Outbound wire transfer dispatch ledger
-│   └── diagnostics.html     # Banking gateway ping utility (Command Injection demo)
+│   └── diagnostics.html     # Banking gateway connectivity ping utility
 └── static/                  # Static assets
-    ├── css/
-    │   └── style.css        # Custom styling extending Bootstrap 5
-    └── js/
-        └── main.js          # Client-side 1-click exploit injection and copy helpers
+    └── css/
+        └── style.css        # Custom banking stylesheet extending Bootstrap 5
 ```
 
 ---
