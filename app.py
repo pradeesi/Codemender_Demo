@@ -61,10 +61,6 @@ def accounts_view() -> str:
     """
     Render account search page and execute user-supplied filter query.
 
-    VULNERABILITY NOTE (FOR CODEMENDER DEMO):
-    Contains CWE-89 (SQL Injection) via direct string concatenation in query construction.
-    An attacker can inject SQL syntax to bypass is_confidential=0 filters and extract classified bank reserves.
-
     Parameters:
         None (Reads query parameters: 'q' and 'type')
 
@@ -77,12 +73,8 @@ def accounts_view() -> str:
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Intentional CWE-89 Vulnerability:
-    # Direct f-string formatting into SQL statement allows SQL injection payloads
-    # e.g., ' OR '1'='1' --
+    # Build dynamic account filter query for commercial treasury directory
     if search_term:
-        # Intentional CWE-89 Vulnerability:
-        # String concatenation allows SQL injection to break out and comment out the confidentiality clause
         query = f"SELECT id, account_number, customer_name, email, account_type, balance, status, is_confidential FROM accounts WHERE customer_name LIKE '%{search_term}%' AND is_confidential = 0"
         logger.warning("Executing dynamic search query: %s", query)
     elif account_type and account_type != "ALL":
@@ -108,9 +100,6 @@ def api_accounts() -> Tuple[Any, int]:
     """
     REST API endpoint for accounts lookup with filter options.
 
-    VULNERABILITY NOTE (FOR CODEMENDER DEMO):
-    Contains CWE-89 (SQL Injection) in REST API query string formatting.
-
     Parameters:
         None (Reads query parameter 'search')
 
@@ -122,7 +111,7 @@ def api_accounts() -> Tuple[Any, int]:
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Intentional CWE-89 Vulnerability in REST API
+    # Filter public commercial accounts by customer name
     sql = f"SELECT account_number, customer_name, account_type, balance, status FROM accounts WHERE is_confidential = 0 AND customer_name LIKE '%{search_query}%'"
     try:
         cursor.execute(sql)
@@ -195,12 +184,6 @@ def diagnostics_view() -> str:
     """
     Render banking infrastructure gateway diagnostics tool.
 
-    VULNERABILITY NOTE (FOR CODEMENDER DEMO):
-    Contains CWE-78 (OS Command Injection).
-    The host parameter is directly concatenated into a shell command and executed using shell=True.
-    An attacker can append shell operators (e.g., '; id', '| whoami', '& cat /etc/passwd')
-    to gain remote code execution on the underlying host or container.
-
     Parameters:
         None (Reads POST form data: host)
 
@@ -213,13 +196,11 @@ def diagnostics_view() -> str:
     if request.method == "POST":
         target_host = request.form.get("host", "127.0.0.1").strip()
 
-        # Intentional CWE-78 Vulnerability:
-        # String concatenation directly into shell=True invocation
+        # Execute ICMP ping probe against the requested gateway host
         cmd = f"ping -c 2 {target_host}"
         logger.warning("Executing system diagnostic command: %s", cmd)
 
         try:
-            # shell=True combined with unescaped input triggers command injection
             proc = subprocess.run(
                 cmd,
                 shell=True,
@@ -241,9 +222,6 @@ def api_ping() -> Tuple[Any, int]:
     """
     REST API endpoint for automated banking gateway connectivity probes.
 
-    VULNERABILITY NOTE (FOR CODEMENDER DEMO):
-    Contains CWE-78 (OS Command Injection) via request query parameters.
-
     Parameters:
         None (Reads query parameter 'host')
 
@@ -252,7 +230,7 @@ def api_ping() -> Tuple[Any, int]:
     """
     host = request.args.get("host", "127.0.0.1")
 
-    # Intentional CWE-78 Command Injection in API
+    # Execute single-packet ICMP reachability check
     cmd = f"ping -c 1 {host}"
     try:
         output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT, text=True, timeout=5)
