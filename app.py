@@ -1,4 +1,6 @@
 """
+Author: Pradeep Singh
+License: Apache-2.0
 Purpose: Core Flask web application for the ApexFin Banking Portal demonstration.
 Architecture/Context: Enterprise banking portal with web front-end routes and backend REST APIs.
 Dependencies/Side Effects: Interacts with SQLite database via database.py; invokes system ping commands for gateway diagnostics.
@@ -264,7 +266,7 @@ def api_ping() -> Tuple[Any, int]:
 @app.route("/healthz")
 def healthz() -> Tuple[Any, int]:
     """
-    Standard liveness and readiness probe endpoint for Cloud Run and GKE.
+    Standard liveness and readiness probe endpoint for the isolated Linux VM service.
 
     Parameters:
         None

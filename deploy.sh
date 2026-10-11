@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # ==============================================================================
+# Author: Pradeep Singh
+# License: Apache-2.0
 # Purpose: Automated deployment script for ApexFin Banking Portal.
-# Architecture/Context: Orchestrates local Python virtual environment, dependencies,
-#                       database initialization, and service startup (with optional Cloud Run flag).
-# Dependencies/Side Effects: Creates/modifies .venv, creates apexfin.db, launches Flask on PORT.
+# Architecture/Context: Runs from GCP Cloud Shell by default to provision an
+#                       isolated Google Compute Engine Linux VM via provision_vm.sh.
+# Dependencies/Side Effects: Delegates to provision_vm.sh by default (or sets up
+#                            local Python venv and SQLite DB when --local is passed).
 # ==============================================================================
 
 set -euo pipefail
@@ -16,15 +19,8 @@ HOST="${HOST:-0.0.0.0}"
 APP_PID_FILE="$SCRIPT_DIR/.app.pid"
 VENV_DIR="$SCRIPT_DIR/.venv"
 
-echo "============================================================"
-echo "🏦 ApexFin Global Bank - Automated Deployment"
-echo "============================================================"
-
-MODE=""
-PROJECT_ID="${GOOGLE_CLOUD_PROJECT:-${PROJECT_ID:-}}"
-ZONE_FLAG=""
-REGION_FLAG=""
-SERVICE_NAME="apexfin-banking-portal"
+MODE="vm"
+FORWARD_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -32,118 +28,65 @@ while [[ $# -gt 0 ]]; do
             MODE="vm"
             shift
             ;;
-        --cloud-run|--run)
-            MODE="cloud-run"
-            shift
-            ;;
         --local)
             MODE="local"
             shift
             ;;
         --project|-p)
-            PROJECT_ID="$2"
+            if [[ -z "${2:-}" ]]; then
+                echo "❌ Error: --project requires a Google Cloud Project ID."
+                exit 1
+            fi
+            FORWARD_ARGS+=("--project" "$2")
             shift 2
             ;;
         --region|-r)
-            REGION_FLAG="$2"
+            if [[ -z "${2:-}" ]]; then
+                echo "❌ Error: --region requires a Compute Engine region."
+                exit 1
+            fi
+            FORWARD_ARGS+=("--region" "$2")
             shift 2
             ;;
         --zone|-z)
-            ZONE_FLAG="$2"
+            if [[ -z "${2:-}" ]]; then
+                echo "❌ Error: --zone requires a Compute Engine zone."
+                exit 1
+            fi
+            FORWARD_ARGS+=("--zone" "$2")
             shift 2
+            ;;
+        -y|--yes|--recreate)
+            FORWARD_ARGS+=("$1")
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: ./deploy.sh [--project|-p <PROJECT_ID>] [--zone|-z <ZONE>] [--region|-r <REGION>] [--recreate|-y]"
+            echo ""
+            echo "Default mode provisions the isolated Linux VM from GCP Cloud Shell."
+            echo "If --project is omitted, an interactive numbered list of all available GCP projects is displayed."
+            exit 0
             ;;
         -*)
             echo "❌ Unknown option: $1"
-            echo "Usage: ./deploy.sh [--vm | --cloud-run | --local] [--project <PROJECT_ID>] [--region <REGION>] [--zone <ZONE>]"
+            echo "Usage: ./deploy.sh [--project|-p <PROJECT_ID>] [--zone|-z <ZONE>] [--region|-r <REGION>] [--recreate|-y]"
             exit 1
             ;;
         *)
-            if [[ -z "$PROJECT_ID" ]]; then
-                PROJECT_ID="$1"
-            fi
+            FORWARD_ARGS+=("$1")
             shift
             ;;
     esac
 done
 
-# Resolve region and zone hierarchy
-if [[ -n "$REGION_FLAG" ]]; then
-    REGION="$REGION_FLAG"
-    if [[ "${REGION,,}" =~ ^(belgium|europe-west1)$ ]]; then
-        REGION="europe-west1"
-    fi
-    if [[ -z "$ZONE_FLAG" ]]; then
-        ZONE="${REGION}-b"
-    else
-        ZONE="$ZONE_FLAG"
-    fi
-elif [[ -n "$ZONE_FLAG" ]]; then
-    ZONE="$ZONE_FLAG"
-    REGION="${ZONE%-*}"
-else
-    REGION="${REGION:-us-central1}"
-    if [[ "${REGION,,}" =~ ^(belgium|europe-west1)$ ]]; then
-        REGION="europe-west1"
-    fi
-    if [[ -z "${ZONE:-}" || "${ZONE}" != "${REGION}"* ]]; then
-        ZONE="${REGION}-b"
-    fi
-fi
-
-# If project ID is provided or GCP environment is present, default to isolated VM
-if [[ -z "$MODE" ]]; then
-    if [[ -n "$PROJECT_ID" ]]; then
-        MODE="vm"
-    else
-        MODE="local"
-    fi
-fi
-
-# Delegate to VM provisioning (default for GCP deployments)
+# Default deployment target: Isolated Google Compute Engine Linux VM (run from GCP Cloud Shell)
 if [[ "$MODE" == "vm" ]]; then
-    echo "🖥️ Deploying application to isolated Google Compute Engine Linux VM..."
-    PROJECT_ID="$PROJECT_ID" REGION="$REGION" ZONE="$ZONE" exec ./provision_vm.sh
+    exec "$SCRIPT_DIR/provision_vm.sh" "${FORWARD_ARGS[@]}"
 fi
 
-# Handle Cloud Run deployment
-if [[ "$MODE" == "cloud-run" ]]; then
-    DEFAULT_PROJECT="$(gcloud config get-value project 2>/dev/null || echo '')"
-    if [[ -z "$PROJECT_ID" ]]; then
-        if [[ -n "$DEFAULT_PROJECT" ]]; then
-            read -r -p "Enter Google Cloud Project ID [$DEFAULT_PROJECT]: " USER_INPUT
-            PROJECT_ID="${USER_INPUT:-$DEFAULT_PROJECT}"
-        else
-            read -r -p "Enter Google Cloud Project ID: " PROJECT_ID
-        fi
-    fi
-
-    if [[ -z "$PROJECT_ID" ]]; then
-        echo "❌ Error: Google Cloud Project ID is required for Cloud Run deployment."
-        exit 1
-    fi
-
-    echo "🚀 Deploying to Google Cloud Run in project: $PROJECT_ID ($REGION)..."
-    gcloud run deploy "$SERVICE_NAME" \
-        --source . \
-        --project "$PROJECT_ID" \
-        --region "$REGION" \
-        --platform managed \
-        --allow-unauthenticated \
-        --port 5000 \
-        --quiet
-
-    SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --project "$PROJECT_ID" --region "$REGION" --format="value(status.url)")
-
-    echo ""
-    echo "============================================================"
-    echo "✅ Cloud Run deployment complete!"
-    echo "🌐 Public Web UI URL: $SERVICE_URL"
-    echo "============================================================"
-    echo "💡 To deprovision or delete the Cloud Run service, run:"
-    echo "   gcloud run services delete $SERVICE_NAME --project $PROJECT_ID --region $REGION --quiet"
-    echo "============================================================"
-    exit 0
-fi
+echo "============================================================"
+echo "🏦 ApexFin Global Bank - Local Service Setup"
+echo "============================================================"
 
 # Step 1: Ensure Python 3 is installed
 if ! command -v python3 &>/dev/null; then

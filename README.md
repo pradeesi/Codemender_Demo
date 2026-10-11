@@ -1,21 +1,19 @@
 # 🏦 ApexFin Global Bank — AI Security Remediation Demo Portal
 
-> **Designed for Google Cloud AI Customer Engineers (CEs) to demonstrate Google Cloud CodeMender's autonomous vulnerability discovery, sandbox verification, and patch generation capabilities to enterprise customers.**
+> **Designed for Google Cloud AI Customer Engineers (CEs) to demonstrate Google Cloud CodeMender's autonomous vulnerability discovery, sandbox verification, and patch generation capabilities inside an isolated Google Compute Engine Linux VM provisioned from GCP Cloud Shell.**
 
 ---
 
 ## Table of Contents
 1. [Executive Summary & Demo Narrative](#executive-summary--demo-narrative)
-2. [Frontend UI Exploit Walkthrough (CE Demo Playbook)](#frontend-ui-exploit-walkthrough-ce-demo-playbook)
-3. [Vulnerability Identification & Remediation (CodeMender vs Manual)](#vulnerability-identification--remediation-codemender-vs-manual)
-4. [Application Architecture](#application-architecture)
-5. [Project Directory Structure](#project-directory-structure)
-6. [Frameworks & Libraries](#frameworks--libraries)
-7. [Environment Variables](#environment-variables)
-8. [Local Execution Instructions](#local-execution-instructions)
-9. [Automated Deployment & Reset Scripts](#automated-deployment--reset-scripts)
-10. [Temporary GCP Demo VM (Provision & Deprovision)](#temporary-gcp-demo-vm-provision--deprovision)
-11. [Cloud Deployment Playbooks (Cloud Run & GKE)](#cloud-deployment-playbooks-cloud-run--gke)
+2. [GCP Cloud Shell Installation & Uninstallation (Isolated Linux VM)](#gcp-cloud-shell-installation--uninstallation-isolated-linux-vm)
+3. [Frontend UI Exploit Walkthrough (CE Demo Playbook)](#frontend-ui-exploit-walkthrough-ce-demo-playbook)
+4. [Vulnerability Identification & Remediation (CodeMender Lifecycle)](#vulnerability-identification--remediation-codemender-lifecycle)
+5. [Demo Reset & Rollback (`./reset_demo.sh`)](#demo-reset--rollback-reset_demosh)
+6. [Application Architecture](#application-architecture)
+7. [Project Directory Structure](#project-directory-structure)
+8. [Frameworks & Libraries](#frameworks--libraries)
+9. [Environment Variables](#environment-variables)
 
 ---
 
@@ -32,9 +30,123 @@ This demo application simulates **ApexFin Global Bank**, a financial services po
 
 ---
 
+## GCP Cloud Shell Installation & Uninstallation (Isolated Linux VM)
+
+Because this application contains realistic, exploitable security vulnerabilities (CWE-89 and CWE-78), the default installation runs from **Google Cloud Shell** and deploys both the **ApexFin Banking Portal** and the **CodeMender CLI (`cm`)** onto a **temporary, isolated Compute Engine Linux VM**.
+
+### Security Isolation Architecture
+
+To ensure zero risk to your GCP environment:
+* **Dedicated Least-Privilege Identity**: The VM does **NOT** attach the default Compute Engine service account. Instead, a dedicated service account (`apexfin-demo-sa`) is created and granted strictly `roles/aiplatform.user` (needed solely for CodeMender AI reasoning). It has **zero access** to Cloud Storage buckets, BigQuery datasets, other VMs, or Secret Manager.
+* **Tag-Scoped Firewall Isolation**: The firewall rule (`apexfin-demo-allow-5000`) is strictly scoped to instances with the network tag `apexfin-demo-server`. No other instances, subnets, or services in your VPC are exposed or modified.
+* **Zero-Impact Teardown Guarantee**: Deprovisioning removes *only* the resources created by the installation script (`apexfin-demo-vm`, `apexfin-demo-allow-5000`, and `apexfin-demo-sa` + its IAM binding). All other VMs, networks, databases, and IAM policies in the project remain untouched.
+
+---
+
+### 1. Provision the Isolated Demo VM from GCP Cloud Shell (`./provision_vm.sh`)
+
+Open **GCP Cloud Shell**, navigate to the `CodeMender` directory, and make the scripts executable:
+
+```bash
+chmod +x provision_vm.sh deprovision_vm.sh deploy.sh reset_demo.sh
+```
+
+#### Option A: Interactive Project Selection (Default)
+Run the installation script without specifying a project ID:
+
+```bash
+./provision_vm.sh
+```
+*(Or run `./deploy.sh`, which delegates to `./provision_vm.sh` by default).*
+
+When no project ID is passed in the command, the script automatically queries all GCP projects accessible to your logged-in account and displays a numbered menu:
+
+```text
+👤 Authenticated GCP Account: your-email@domain.com
+
+🔍 Fetching available Google Cloud Projects for your-email@domain.com...
+
+📋 Available Google Cloud Projects:
+--------------------------------------------------------------------------------
+   [ 1] example-demo-project-01          (Customer Demo Sandbox) [current gcloud project]
+   [ 2] example-security-lab-02          (AppSec Lab)
+   [ 3] example-testing-env-03           (Testing Environment)
+--------------------------------------------------------------------------------
+Select the project number [1-3] (or enter Project ID):
+```
+
+Simply type the **number** corresponding to the project where you want to deploy the demo VM (e.g., `1`) and press **Enter**.
+
+#### Option B: Provide the GCP Project ID Directly in the Command
+If you already know the target GCP Project ID, pass it directly via `--project` (or `-p`):
+
+```bash
+./provision_vm.sh --project <YOUR_PROJECT_ID>
+```
+
+You can also specify the Compute Engine zone (`--zone` / `-z`) or region (`--region` / `-r`), and auto-recreate (`--recreate` / `-y`):
+
+```bash
+./provision_vm.sh --project <YOUR_PROJECT_ID> --zone us-central1-a --recreate
+```
+
+#### What the Installation Script Provisions:
+1. Enables `compute.googleapis.com` and `aiplatform.googleapis.com` on the selected project.
+2. Auto-detects the available VPC network and regional subnet.
+3. Creates the least-privilege service account `apexfin-demo-sa@<YOUR_PROJECT_ID>.iam.gserviceaccount.com` with `roles/aiplatform.user`.
+4. Creates the tag-scoped VPC firewall rule `apexfin-demo-allow-5000` (TCP port 5000 ingress for tag `apexfin-demo-server`).
+5. Provisions an `e2-standard-2` (2 vCPUs, 8 GB RAM) Ubuntu 22.04 LTS VM (`apexfin-demo-vm`) and runs the startup script to:
+   * Install Python 3, `venv`, `git`, `curl`, `unzip`, and `iputils-ping`.
+   * Install the **CodeMender CLI (`cm`)** in `/usr/local/bin/cm`.
+   * Deploy the ApexFin portal into `/opt/apexfin`, initialize Git and `apexfin.db`, and start the `apexfin.service` systemd daemon on port `5000`.
+   * Configure `/etc/profile.d/codemender.sh` with `GOOGLE_CLOUD_PROJECT=<YOUR_PROJECT_ID>`.
+
+#### Accessing the Demo UI & Sandbox VM:
+Once provisioning completes, the script prints the access commands:
+
+* **Direct Public Web URL**:
+  ```text
+  http://<EXTERNAL_IP>:5000
+  ```
+* **Cloud Shell Port Forwarding & Web Preview** *(if corporate firewall blocks port 5000)*:
+  ```bash
+  gcloud compute ssh apexfin-demo-vm --zone=<ZONE> --project=<YOUR_PROJECT_ID> -- -L 5000:localhost:5000
+  ```
+  Then click **Web Preview** in Cloud Shell and preview on **Port 5000**.
+* **SSH into the VM from Cloud Shell to Run CodeMender (`cm`)**:
+  ```bash
+  gcloud compute ssh apexfin-demo-vm --zone=<ZONE> --project=<YOUR_PROJECT_ID>
+  ```
+
+---
+
+### 2. Uninstall & Deprovision Demo Resources from GCP Cloud Shell (`./deprovision_vm.sh`)
+
+After completing your customer demo, run the uninstallation script from **GCP Cloud Shell** to remove all demo resources:
+
+#### Option A: Interactive Project Selection (Default)
+```bash
+./deprovision_vm.sh
+```
+Displays the numbered list of all your GCP projects so you can select the project number to clean up, then prompts for confirmation (`y/N`).
+
+#### Option B: Provide the GCP Project ID Directly in the Command
+```bash
+./deprovision_vm.sh --project <YOUR_PROJECT_ID>
+```
+*(Add `-y` or `--yes` to skip the confirmation prompt: `./deprovision_vm.sh --project <YOUR_PROJECT_ID> -y`)*
+
+**What the Uninstallation Script Removes**:
+1. Compute Engine VM instance `apexfin-demo-vm` (and its attached boot disk).
+2. Tag-scoped VPC firewall rule `apexfin-demo-allow-5000`.
+3. Dedicated service account `apexfin-demo-sa@<YOUR_PROJECT_ID>.iam.gserviceaccount.com` and its `roles/aiplatform.user` IAM policy binding.
+4. Leaves all other VMs, networks, firewall rules, service accounts, and configurations in the project completely untouched.
+
+---
+
 ## Frontend UI Exploit Walkthrough (CE Demo Playbook)
 
-During your presentation with customer CISOs, AppSec Directors, and Lead Architects, use the realistic, clean web interface to demonstrate vulnerability impact, then fix the code via CodeMender on the VM shell, and finally return to the UI to verify remediation.
+During your presentation with customer CISOs, AppSec Directors, and Lead Architects, use the web interface to demonstrate vulnerability impact, then remediate the code via CodeMender inside the VM SSH session, and finally return to the UI to verify the fix.
 
 ### Vulnerability 1: SQL Injection (CWE-89) &mdash; Classified Account Exfiltration
 
@@ -43,18 +155,14 @@ During your presentation with customer CISOs, AppSec Directors, and Lead Archite
 * **Business Risk**: Unauthenticated or low-privilege users can bypass confidentiality flags, exfiltrating secret offshore reserve accounts and SWIFT Nostro settlement balances totaling over **$960,000,000**.
 
 #### Step-by-Step UI Demonstration:
-1. Open your browser and navigate to the application dashboard: [http://localhost:5000](http://localhost:5000) (or your VM's public IP / Cloud Shell URL).
+1. Open the ApexFin portal in your browser (`http://<EXTERNAL_IP>:5000` or via Cloud Shell Web Preview on port `5000`).
 2. Click **Customer Accounts** in the top navigation bar.
 3. Notice that normal searches (e.g. searching for `Alice` or `Checking`) return only authorized commercial accounts.
-4. Now, enter the SQL injection payload directly into the **Search** input box:
-   ```sql
-   ' OR 1=1 --
-   ```
-5. Click **Search**.
-6. **Observed Impact**: The query condition breaks out of the intended customer filter. The confidential multi-million dollar banking reserves are exposed in the accounts table:
+4. Click the **Inject SQLi (`' OR 1=1 --`)** quick-fill button (or paste `' OR 1=1 --` into the **Search** input box) and click **Search**.
+5. **Observed Impact**: The query condition breaks out of the intended customer filter. Confidential multi-million dollar banking reserves are exposed in the accounts table:
    * `ACC-99999` &mdash; *Executive Confidential Reserve* &mdash; **$48,500,000.00** (Restricted)
    * `ACC-88888` &mdash; *SWIFT Nostro Settlement* &mdash; **$912,000,000.00** (Restricted)
-7. *(Optional Advanced Query)*: Enter a UNION SELECT payload:
+6. *(Optional Advanced Query)*: Enter a `UNION SELECT` payload:
    ```sql
    ' UNION SELECT id, account_number, customer_name, email, account_type, balance, status, is_confidential FROM accounts WHERE is_confidential=1 --
    ```
@@ -65,48 +173,49 @@ During your presentation with customer CISOs, AppSec Directors, and Lead Archite
 
 * **Module**: Banking Network Gateway Diagnostics (`/system-diagnostics`)
 * **Vulnerable Source**: [`app.py`](app.py) &rarr; `diagnostics_view()` and `api_ping()`
-* **Business Risk**: Remote Code Execution (RCE). An attacker with access to the diagnostics portal can execute arbitrary shell commands under the web server's host/container process privileges.
+* **Business Risk**: Remote Code Execution (RCE). An attacker with access to the diagnostics portal can execute arbitrary shell commands under the web server's OS privileges.
 
 #### Step-by-Step UI Demonstration:
 1. From the top navigation bar, click **Gateway Diagnostics**.
 2. Normal usage: Entering `127.0.0.1` executes an ICMP ping probe (`ping -c 2 127.0.0.1`) and displays standard network latency.
-3. Now, demonstrate command injection by chaining shell operators in the **Target Host** input box:
+3. Demonstrate command injection by chaining shell operators in the **Target Host** input box:
    ```bash
    127.0.0.1; whoami; id; uname -a
    ```
 4. Click **Run Diagnostic Probe**.
-5. **Observed Impact**: The dark console output stream renders the output of `whoami`, `id`, and system kernel telemetry directly below the ping statistics.
-6. Now demonstrate arbitrary file read on host assets:
+5. **Observed Impact**: The console output stream renders the output of `whoami`, `id`, and system kernel telemetry directly below the ping statistics.
+6. Demonstrate arbitrary file read on the VM host:
    ```bash
    127.0.0.1; cat /etc/passwd | head -n 5
    ```
-7. Point out to the customer: If this service were running in Kubernetes or a production VM, the attacker could dump environment variables, exfiltrate Google Cloud Service Account tokens from metadata endpoints, and achieve full lateral movement.
 
 ---
 
-## Vulnerability Identification & Remediation (CodeMender vs Manual)
+## Vulnerability Identification & Remediation (CodeMender Lifecycle)
 
-Show the customer the difference between traditional manual triage and CodeMender's agentic lifecycle:
+SSH into the sandbox VM from GCP Cloud Shell:
+
+```bash
+gcloud compute ssh apexfin-demo-vm --zone=<ZONE> --project=<YOUR_PROJECT_ID>
+cd /opt/apexfin
+```
 
 ### Phase 1: Autonomous Vulnerability Discovery (`cm find`)
 
-Run CodeMender to scan the codebase:
+Initialize CodeMender and scan the application code:
 
 ```bash
-# Set your active GCP project (whitelisted for CodeMender)
-export GOOGLE_CLOUD_PROJECT="maf-testing-387011"
-
 # Initialize CodeMender workspace tracking
 cm init
 
-# Scan the repository
+# Scan the application source
 cm find ./app.py
 ```
 
 **What CodeMender does**:
 * Identifies untrusted input from `request.args.get("q")` flowing into SQL string interpolation `query = f"SELECT ... {search_term} ..."` (CWE-89).
 * Identifies untrusted form data from `request.form.get("host")` concatenated into `subprocess.run(f"ping -c 2 {target_host}", shell=True)` (CWE-78).
-* Records findings in the local state database (`state.db`) with unique Finding IDs.
+* Records findings in the local state database with unique Finding IDs.
 
 To view the findings table:
 ```bash
@@ -124,10 +233,9 @@ cm verify <FINDING_ID>
 ```
 
 **What CodeMender does**:
-* Launches an isolated, lightweight process-level sandbox container (`exebox`) on the local workstation.
-* Autonomously authors and runs a proof-of-concept exploit against the local codebase.
-* If the exploit succeeds, it proves the vulnerability is **exploitable** and promotes the status from unverified to `OPEN (VERIFIED)`.
-* If the exploit fails or the path is unreachable, CodeMender dismisses the false positive without burdening your engineering team.
+* Launches an isolated, lightweight process-level sandbox container (`exebox`) on the VM.
+* Autonomously authors and executes a proof-of-concept exploit against the application.
+* If the exploit succeeds, it proves the vulnerability is **exploitable** and promotes the finding status to `OPEN (VERIFIED)`.
 
 ---
 
@@ -141,26 +249,12 @@ cm fix <FINDING_ID>
 
 **What CodeMender does**:
 1. **Generates Patch Candidate**:
-   * For **SQLi**: Replaces dynamic f-string formatting with parameterized SQLite queries:
-     ```python
-     # Remediated
-     cursor.execute(
-         "SELECT ... FROM accounts WHERE is_confidential = 0 AND (customer_name LIKE ? OR account_number LIKE ?)",
-         (f"%{search_term}%", f"%{search_term}%")
-     )
-     ```
-   * For **Command Injection**: Disables `shell=True` and executes arguments as a sanitized list:
-     ```python
-     # Remediated
-     proc = subprocess.run(["ping", "-c", "2", target_host], shell=False, capture_output=True, text=True)
-     ```
-2. **Applies to Sandbox Copy**: Isolates patch testing so your working tree is untouched until verified.
-3. **Runs Regression Test Suite**: Executes the command configured in [`config.yaml`](config.yaml):
-   ```bash
-   python3 -m unittest test_app.py
-   ```
+   * **SQLi (CWE-89)**: Replaces dynamic f-string formatting with parameterized SQLite queries (`?` placeholders).
+   * **Command Injection (CWE-78)**: Disables `shell=True` and passes arguments as a sanitized argument list (`["ping", "-c", "2", target_host]`).
+2. **Applies to Sandbox Copy**: Isolates patch testing so the working tree is untouched until verified.
+3. **Runs Regression Test Suite**: Executes `python3 -m unittest test_app.py` (configured in [`config.yaml`](config.yaml)).
 4. **Re-runs PoC Exploit**: Verifies that the previous exploit payload now fails safely.
-5. **Applies Patch**: Stages the verified diff cleanly in Git.
+5. **Applies Patch**: Applies the verified fix to `/opt/apexfin/app.py`.
 
 Inspect the resulting diff:
 ```bash
@@ -171,50 +265,60 @@ cm vcs diff
 
 ### Phase 4: Re-testing from the Web UI (Verification of Fix)
 
-After CodeMender generates and applies the verified patches in `/opt/apexfin`:
-
-1. **Automatic Reload**: The application service running on the VM immediately reloads the updated code (or run `sudo systemctl restart apexfin.service` if needed).
+1. Gunicorn (`--reload`) automatically reloads `/opt/apexfin/app.py` when modified (or run `sudo systemctl restart apexfin.service`).
 2. **Re-test SQL Injection on Customer Accounts**:
-   * Navigate back to **Customer Accounts** in your browser.
    * Enter `' OR 1=1 --` into the **Search** field and click **Search**.
-   * **Observed Result**: The exploit is neutralized. SQLite executes the query using parameterized bindings, treating the entire payload as a literal string. The confidential offshore accounts remain completely protected and hidden.
+   * **Observed Result**: The exploit is neutralized. Confidential offshore accounts remain hidden.
 3. **Re-test Command Injection on Gateway Diagnostics**:
-   * Navigate back to **Gateway Diagnostics** in your browser.
    * Enter `127.0.0.1; whoami; id` into the **Target Host** field and click **Run Diagnostic Probe**.
-   * **Observed Result**: The shell metacharacters (`;`) are no longer interpreted by an OS shell. The system executes the ping binary safely without executing `whoami` or `id`.
+   * **Observed Result**: Shell metacharacters (`;`) are no longer interpreted by a shell, preventing command execution.
+
+---
+
+## Demo Reset & Rollback (`./reset_demo.sh`)
+
+If you want to reset the application state inside `/opt/apexfin` on the VM between back-to-back customer sessions without reprovisioning the VM:
+
+```bash
+cd /opt/apexfin
+./reset_demo.sh
+sudo systemctl restart apexfin.service
+```
+
+**What it accomplishes**:
+* Reverts all source code modifications applied by CodeMender (`git checkout HEAD -- .`).
+* Deletes temporary candidate branches (`cm-*`) generated during `cm fix`.
+* Re-seeds a clean SQLite banking database (`apexfin.db`).
+* Cleans local CodeMender state caches and runs the unit test suite (`test_app.py`).
 
 ---
 
 ## Application Architecture
 
-The ApexFin Banking Portal is structured around a local-first, lightweight 3-tier architecture:
+The ApexFin Banking Portal runs inside the isolated Compute Engine Linux VM as a 3-tier Python web application:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                       Client Browser                        │
 │   (Bootstrap 5 UI, Live Exploit Injector, SWIFT Ledger)     │
 └──────────────────────────────┬──────────────────────────────┘
-                               │ HTTP / JSON
+                               │ HTTP / JSON (Port 5000)
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                 Flask Application (app.py)                  │
-│  ┌────────────────────────┐     ┌────────────────────────┐  │
-│  │    Accounts Engine     │     │  Gateway Diagnostics   │  │
-│  │  (CWE-89 SQLi Vector)  │     │   (CWE-78 RCE Vector)  │  │
-│  └───────────┬────────────┘     └───────────┬────────────┘  │
-└──────────────┼──────────────────────────────┼───────────────┘
-               │                              │
-               ▼                              ▼
-┌─────────────────────────────┐  ┌────────────────────────────┐
-│ SQLite Database (apexfin.db)│  │ Operating System Subprocess│
-│ (Accounts & Wire Transfers) │  │   (ping /bin/sh invocation)│
-└─────────────────────────────┘  └────────────────────────────┘
+│        Isolated GCE Linux VM (apexfin-demo-vm :5000)        │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │              Flask Application (app.py)               │  │
+│  │  ┌──────────────────────┐   ┌──────────────────────┐  │  │
+│  │  │   Accounts Engine    │   │ Gateway Diagnostics  │  │  │
+│  │  │ (CWE-89 SQLi Vector) │   │ (CWE-78 RCE Vector)  │  │  │
+│  │  └──────────┬───────────┘   └──────────┬───────────┘  │  │
+│  └─────────────┼──────────────────────────┼──────────────┘  │
+│                ▼                          ▼                 │
+│  ┌───────────────────────────┐ ┌──────────────────────────┐ │
+│  │SQLite Database(apexfin.db)│ │OS Subprocess (ping/sh)   │ │
+│  └───────────────────────────┘ └──────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
 ```
-
-* **Presentation Layer**: HTML5 + Bootstrap 5 responsive templates with built-in Customer Engineer interactive demo payloads.
-* **Controller Layer**: Flask 3.x web application exposing standard web views and REST API endpoints.
-* **Persistence Layer**: SQLite 3 database (`apexfin.db`) with schema separation between commercial accounts and classified executive reserves.
-* **Testing Layer**: Python `unittest` test suite in [`test_app.py`](test_app.py) validating core business workflows.
 
 ---
 
@@ -222,15 +326,14 @@ The ApexFin Banking Portal is structured around a local-first, lightweight 3-tie
 
 ```
 CodeMender/
-├── .env.example             # Template for required environment variables
-├── .gitignore               # Strict exclusion rules for secrets, DBs, and venvs
+├── .env.example             # Template for environment variables
+├── .gitignore               # Exclusion rules for secrets, DBs, and virtualenvs
 ├── config.yaml              # CodeMender scan and build verification configuration
-├── Dockerfile               # Container manifest for Google Cloud Run & GKE
 ├── requirements.txt         # Core Python dependencies (Flask, Gunicorn)
-├── deploy.sh                # Automated local venv & Cloud Run deployment script
-├── reset_demo.sh            # Complete environment rollback script for re-running demos
-├── provision_vm.sh          # Automated temporary GCP VM sandbox provisioning script
-├── deprovision_vm.sh        # Teardown script to wipe VM & firewall after customer demos
+├── provision_vm.sh          # Cloud Shell installer: provisions isolated GCE Linux VM & CodeMender
+├── deprovision_vm.sh        # Cloud Shell uninstaller: removes demo VM, firewall rule, and demo SA
+├── deploy.sh                # Wrapper script (defaults to provision_vm.sh from Cloud Shell)
+├── reset_demo.sh            # Environment rollback script for resetting demo state on the VM
 ├── app.py                   # Main Flask application with intentional demo vulnerabilities
 ├── database.py              # SQLite schema creation and financial sample seed data
 ├── test_app.py              # Regression test suite invoked by CodeMender build.command
@@ -261,264 +364,15 @@ CodeMender/
 
 ## Environment Variables
 
-All configuration is externalized. Set these variables in your shell or copy [`.env.example`](.env.example) to `.env`:
+All runtime configuration is externalized (see [`.env.example`](.env.example)):
 
 | Variable Key | Type | Default Value | Description | Example |
 | :--- | :--- | :--- | :--- | :--- |
 | `PORT` | Integer | `5000` | Port on which the application listens | `PORT=5000` |
 | `HOST` | String | `0.0.0.0` | Network binding interface | `HOST=0.0.0.0` |
-| `FLASK_ENV` | String | `development` | Flask runtime environment (`development` / `production`) | `FLASK_ENV=production` |
-| `FLASK_DEBUG` | Integer | `0` | Debug mode switch (`1` enables interactive debugger) | `FLASK_DEBUG=0` |
+| `FLASK_ENV` | String | `production` | Flask runtime environment (`development` / `production`) | `FLASK_ENV=production` |
+| `FLASK_DEBUG` | Integer | `0` | Debug mode switch (`0` disabled on demo VM) | `FLASK_DEBUG=0` |
 | `SECRET_KEY` | String | *Generated* | Session cookie signing key | `SECRET_KEY=custom-key-3918` |
 | `DATABASE_PATH` | String | `apexfin.db` | File path for SQLite database | `DATABASE_PATH=apexfin.db` |
 | `LOG_LEVEL` | String | `INFO` | Semantic logging verbosity (`DEBUG`, `INFO`, `WARN`, `ERROR`) | `LOG_LEVEL=INFO` |
-| `GOOGLE_CLOUD_PROJECT` | String | *Unset* | Target Google Cloud Project for CodeMender / Cloud Run | `GOOGLE_CLOUD_PROJECT=maf-testing-387011` |
-
----
-
-## Local Execution Instructions
-
-Execute these copy-paste commands on any Linux or macOS machine:
-
-### 1. Automated Setup & Launch
-Simply run the automated deployment script:
-```bash
-chmod +x deploy.sh reset_demo.sh
-./deploy.sh
-```
-
-This will automatically create `.venv`, install packages, seed the database, run the test suite, and launch the server in the background at **`http://127.0.0.1:5000`**.
-
-### 2. Manual Step-by-Step Setup
-If you prefer running commands manually:
-
-```bash
-# 1. Create and activate virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# 2. Install dependencies
-pip install --upgrade pip
-pip install -r requirements.txt
-
-# 3. Seed the SQLite banking database
-python3 database.py
-
-# 4. Verify test suite
-python3 -m unittest test_app.py
-
-# 5. Launch application
-python3 app.py
-```
-
-Access the portal in your browser at `http://localhost:5000`.
-
----
-
-## Automated Deployment & Reset Scripts
-
-### 1. Deploy Script (`./deploy.sh`)
-* **Local Mode**:
-  ```bash
-  ./deploy.sh
-  ```
-  Deploys locally, manages virtualenv, verifies tests, and records PID in `.app.pid`.
-* **Cloud Run Mode**:
-  ```bash
-  ./deploy.sh --cloud-run
-  ```
-  Builds and deploys the container directly to Google Cloud Run in the configured project.
-
-### 2. Reset / Rollback Script (`./reset_demo.sh`)
-When you finish presenting to one customer and need to wipe all code changes and database entries before the next presentation:
-
-```bash
-./reset_demo.sh
-```
-
-**What it accomplishes**:
-* Stops running application processes and frees port 5000.
-* Reverts all source code modifications applied by CodeMender (`git checkout HEAD -- .`).
-* Deletes any temporary candidate branches (`cm-*`) generated during `cm fix`.
-* Re-seeds a pristine SQLite banking database.
-* Cleans local CodeMender caches and state databases.
-* Runs the unit test suite to verify 100% baseline readiness.
-
----
-
-## Temporary GCP Demo VM (Provision & Deprovision)
-
-Because this application contains realistic, exploitable security vulnerabilities (CWE-89 and CWE-78), running it inside a **temporary, disposable Compute Engine Linux VM** on Google Cloud is the recommended best practice for Customer Engineers. This isolates exploit execution away from your local workstation and allows anyone on the customer call to access the live demo UI over a public URL or Cloud Shell Web Preview.
-
-### Security Isolation Architecture
-
-To ensure zero risk to customer cloud environments:
-* **Dedicated Least-Privilege Identity**: The VM does **NOT** attach the default Compute Engine service account (which often has broad Editor rights). Instead, a dedicated service account `apexfin-demo-sa` is created and granted strictly `roles/aiplatform.user` (needed solely for CodeMender AI reasoning). It has **zero access** to Google Cloud Storage buckets, BigQuery datasets, other VMs, or Secret Manager.
-* **Tag-Scoped Firewall Isolation**: The firewall rule `apexfin-demo-allow-5000` is strictly targeted to instances with the network tag `apexfin-demo-server`. No other instances, subnets, or services in your VPC are exposed or modified.
-* **Zero-Impact Teardown Guarantee**: Deprovisioning targets *strictly* `apexfin-demo-vm`, `apexfin-demo-allow-5000`, and `apexfin-demo-sa`. Existing instances, networks, databases, and IAM policies in the project remain completely untouched.
-
----
-
-### 1. Automated Provisioning (`./provision_vm.sh`)
-
-Run the automated provisioning script:
-
-```bash
-chmod +x provision_vm.sh deprovision_vm.sh
-./provision_vm.sh
-```
-
-*(Or non-interactively with auto-recreation: `./provision_vm.sh --recreate`)*
-
-**Interactive Prompts & Behavior**:
-1. **GCP Project ID Selection**:
-   The script inspects your active `gcloud` configuration and presents the current project ID as default (e.g. `maf-testing-387011`). You can press **Enter** to accept the default or type a different Project ID (e.g. `pradeesi-ai-demo`).
-2. **Compute Zone Selection**:
-   Defaults to `us-central1-a` (or press Enter).
-3. **Automated Infrastructure Provisioning**:
-   * Auto-detects available regional VPC networks (e.g. `default-vpc` or `default`).
-   * Configures the dedicated, least-privilege service account `apexfin-demo-sa` with `roles/aiplatform.user`.
-   * Configures the tag-scoped VPC ingress firewall rule (`apexfin-demo-allow-5000`) for TCP port 5000.
-   * Provisions an `e2-standard-2` (2 vCPUs, 8 GB RAM) Ubuntu 22.04 LTS Compute Engine VM (`apexfin-demo-vm`).
-   * Executes an automated startup script on the VM that:
-     * Installs Python 3, pip, venv, git, curl, unzip, and `iputils-ping`.
-     * Pre-installs the **CodeMender CLI (`cm`)** binary in `/usr/local/bin/cm` directly from Google's Artifact Registry.
-     * Deploys the ApexFin banking application code into `/opt/apexfin`.
-     * Sets up a dedicated Python virtualenv, installs requirements, seeds `apexfin.db`, and initializes Git.
-     * Creates and starts a managed `systemd` daemon (`apexfin.service`) bound to port 5000.
-4. **Access Endpoints Output**:
-   The script automatically resolves the external IP and provides:
-   * **Direct Public Web URL**:
-     ```text
-     http://<EXTERNAL_IP>:5000
-     ```
-     *(Accessible immediately in any browser from anywhere during the customer presentation)*.
-   * **Cloud Shell / Local Port Forwarding**:
-     ```bash
-     gcloud compute ssh apexfin-demo-vm --zone=us-central1-a --project=YOUR_PROJECT_ID -- -L 5000:localhost:5000
-     ```
-     *(Allows viewing the demo in Cloud Shell Web Preview or localhost:5000 if customer network policies block port 5000)*.
-   * **SSH Access to Run CodeMender on the VM**:
-     ```bash
-     gcloud compute ssh apexfin-demo-vm --zone=us-central1-a --project=YOUR_PROJECT_ID
-     ```
-     Inside the VM:
-     ```bash
-     cd /opt/apexfin
-     cm find ./app.py
-     cm verify <FINDING_ID>
-     cm fix <FINDING_ID>
-     ```
-
----
-
-### 2. Automated Deprovisioning & Teardown (`./deprovision_vm.sh`)
-
-Once your customer presentation or workshop is complete, clean up all cloud assets with a single command:
-
-```bash
-./deprovision_vm.sh
-```
-
-*(Or auto-confirm with `./deprovision_vm.sh -y`)*
-
-**What the script does**:
-1. Prompts for the Project ID (defaulting to your current active project).
-2. Confirms deletion with a safety prompt (`y/N`).
-3. Deletes the Compute Engine instance `apexfin-demo-vm` and its boot disk.
-4. Deletes the VPC firewall rule `apexfin-demo-allow-5000`.
-5. Deletes the isolated service account `apexfin-demo-sa`.
-6. Cleans up any local temporary bundles.
-7. Guarantees **zero dangling cloud infrastructure, zero ongoing charges, and zero side effects to other project resources**.
-
----
-
-## Cloud Deployment Playbooks (Cloud Run & GKE)
-
-### Target 1: Google Cloud Run (Recommended for Serverless Demos)
-
-1. **Authenticate and set project**:
-   ```bash
-   gcloud auth login
-   gcloud config set project maf-testing-387011
-   ```
-
-2. **Deploy directly from source**:
-   ```bash
-   gcloud run deploy apexfin-banking-portal \
-       --source . \
-       --region us-central1 \
-       --platform managed \
-       --allow-unauthenticated \
-       --port 5000
-   ```
-
-3. **Verify Deployment**:
-   ```bash
-   gcloud run services describe apexfin-banking-portal --region us-central1 --format='value(status.url)'
-   ```
-
----
-
-### Target 2: Google Kubernetes Engine (GKE)
-
-1. **Build and push container image using Cloud Build**:
-   ```bash
-   export PROJECT_ID=$(gcloud config get-value project)
-   gcloud builds submit --tag gcr.io/$PROJECT_ID/apexfin-banking-portal:v1 .
-   ```
-
-2. **Deploy Kubernetes Manifest**:
-   ```yaml
-   apiVersion: apps/v1
-   kind: Deployment
-   metadata:
-     name: apexfin-banking-deployment
-     labels:
-       app: apexfin-banking
-   spec:
-     replicas: 2
-     selector:
-       matchLabels:
-         app: apexfin-banking
-     template:
-       metadata:
-         labels:
-           app: apexfin-banking
-       spec:
-         containers:
-         - name: apexfin-app
-           image: gcr.io/PROJECT_ID/apexfin-banking-portal:v1
-           ports:
-           - containerPort: 5000
-           livenessProbe:
-             httpGet:
-               path: /healthz
-               port: 5000
-             initialDelaySeconds: 10
-             periodSeconds: 15
-           resources:
-             limits:
-               cpu: "500m"
-               memory: "512Mi"
-             requests:
-               cpu: "100m"
-               memory: "128Mi"
-   ---
-   apiVersion: v1
-   kind: Service
-   metadata:
-     name: apexfin-banking-service
-   spec:
-     type: LoadBalancer
-     selector:
-       app: apexfin-banking
-     ports:
-     - port: 80
-       targetPort: 5000
-   ```
-
-3. **Apply manifest**:
-   ```bash
-   kubectl apply -f deployment.yaml
-   ```
+| `GOOGLE_CLOUD_PROJECT` | String | *Selected Project* | Target Google Cloud Project ID for CodeMender CLI | `GOOGLE_CLOUD_PROJECT=my-gcp-project` |

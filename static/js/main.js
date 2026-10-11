@@ -1,4 +1,6 @@
 /**
+ * Author: Pradeep Singh
+ * License: Apache-2.0
  * Purpose: Client-side interactive scripting for ApexFin Banking Portal.
  * Architecture/Context: Front-end event handlers for form interactions and status feedback.
  * Dependencies/Side Effects: Interacts with DOM input fields and Bootstrap alert elements.

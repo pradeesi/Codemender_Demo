@@ -1,3 +1,5 @@
+# Author: Pradeep Singh
+# License: Apache-2.0
 # Purpose: Gitignore configuration for the ApexFin Bank CodeMender demo project.
 # Architecture/Context: Root-level Git filter for security and build artifact isolation.
 # Dependencies/Side Effects: Prevents secrets, environment configurations, and virtual environments from being tracked.
@@ -20,18 +22,23 @@ ENV/
 
 # Sensitive Environment Configurations & Secrets
 .env
-.env.local
+.env.*
+!.env.example
 *.pem
 *.key
 *.cert
 *.crt
 *service-account*.json
-credentials.json
+*credentials*.json
+.gcloud/
 
-# Local SQLite databases (created dynamically via database.py)
+# Local SQLite databases & runtime PID/archives (created dynamically)
 *.db
+*.db-journal
 *.sqlite3
 .app.pid
+*.tar.gz
+*.zip
 
 # Operating System & IDE noise
 .DS_Store
@@ -41,8 +48,9 @@ Thumbs.db
 *.swp
 *~
 
-# CodeMender local execution state and artifacts
+# CodeMender local execution state and logs
 .codemender/
 .cm_project
+state.db*
 *.log
 logs/

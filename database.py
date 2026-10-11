@@ -1,4 +1,6 @@
 """
+Author: Pradeep Singh
+License: Apache-2.0
 Purpose: Database initialization, connection management, and sample data seeding for ApexFin Banking Portal.
 Architecture/Context: Data access layer managing SQLite storage for banking accounts and transactions.
 Dependencies/Side Effects: Interacts with the local file system (SQLite database file specified via DATABASE_PATH).

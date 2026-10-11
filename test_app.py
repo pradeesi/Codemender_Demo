@@ -1,4 +1,6 @@
 """
+Author: Pradeep Singh
+License: Apache-2.0
 Purpose: Unit and regression test suite for ApexFin Banking Portal.
 Architecture/Context: Executed by CodeMender build verification step (build.command).
 Dependencies/Side Effects: Initializes an in-memory/temporary test database to validate application routes.

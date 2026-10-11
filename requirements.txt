@@ -1,5 +1,7 @@
+# Author: Pradeep Singh
+# License: Apache-2.0
 # Purpose: Direct dependencies for ApexFin Banking Portal demo application.
-# Architecture/Context: Python package requirements for local execution and Docker containers.
+# Architecture/Context: Python package requirements for the isolated Linux VM.
 # Dependencies/Side Effects: Installed via pip install -r requirements.txt.
 
 Flask>=3.0.0,<3.2.0

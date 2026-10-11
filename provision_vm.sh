@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
+# Author: Pradeep Singh
+# License: Apache-2.0
 # Purpose: Automated provisioning script for deploying ApexFin Banking Portal
 #          and the CodeMender CLI onto a temporary, isolated Google Compute Engine VM.
 # Architecture/Context: GCP Infrastructure-as-Code automation script for Customer Engineers (CEs)
@@ -21,38 +23,148 @@ MACHINE_TYPE="e2-standard-2"
 DEFAULT_ZONE="us-central1-a"
 
 AUTO_RECREATE=false
-for arg in "$@"; do
-    if [[ "$arg" == "-y" || "$arg" == "--yes" || "$arg" == "--recreate" ]]; then
-        AUTO_RECREATE=true
-    fi
+PROJECT_ID="${PROJECT_ID:-}"
+ZONE="${ZONE:-}"
+REGION="${REGION:-}"
+
+usage() {
+    echo "Usage: ./provision_vm.sh [--project|-p <PROJECT_ID>] [--zone|-z <ZONE>] [--region|-r <REGION>] [--recreate|-y]"
+    echo ""
+    echo "Options:"
+    echo "  -p, --project <PROJECT_ID>  Target Google Cloud Project ID (if omitted, displays an interactive numbered list)"
+    echo "  -z, --zone <ZONE>           Compute Engine Zone (default: $DEFAULT_ZONE)"
+    echo "  -r, --region <REGION>       Compute Engine Region (auto-resolves zone if specified)"
+    echo "  -y, --yes, --recreate       Automatically recreate VM if it already exists"
+    echo "  -h, --help                  Show this help message"
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -p|--project)
+            if [[ -z "${2:-}" ]]; then
+                echo "❌ Error: --project requires a Google Cloud Project ID."
+                exit 1
+            fi
+            PROJECT_ID="$2"
+            shift 2
+            ;;
+        -z|--zone)
+            if [[ -z "${2:-}" ]]; then
+                echo "❌ Error: --zone requires a Compute Engine zone."
+                exit 1
+            fi
+            ZONE="$2"
+            shift 2
+            ;;
+        -r|--region)
+            if [[ -z "${2:-}" ]]; then
+                echo "❌ Error: --region requires a Compute Engine region."
+                exit 1
+            fi
+            REGION="$2"
+            shift 2
+            ;;
+        -y|--yes|--recreate)
+            AUTO_RECREATE=true
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -*)
+            echo "❌ Unknown option: $1"
+            usage
+            exit 1
+            ;;
+        *)
+            if [[ -z "$PROJECT_ID" ]]; then
+                PROJECT_ID="$1"
+            fi
+            shift
+            ;;
+    esac
 done
 
 echo "================================================================================"
 echo "🏦 ApexFin Global Bank — Automated GCP Demo VM Provisioning (Isolated Sandbox)"
 echo "================================================================================"
 
-# Step 1: Resolve Project ID with interactive prompt and fallback default
-CURRENT_GCP_PROJECT=$(gcloud config get-value project 2>/dev/null || echo "")
-if [[ -z "$CURRENT_GCP_PROJECT" ]]; then
-    CURRENT_GCP_PROJECT="maf-testing-387011"
+# Verify active gcloud authentication
+ACTIVE_ACCOUNT=$(gcloud auth list --filter="status:ACTIVE" --format="value(account)" 2>/dev/null | head -n 1 || true)
+if [[ -z "$ACTIVE_ACCOUNT" ]]; then
+    echo "❌ Error: No active gcloud authentication detected."
+    echo "   Please run 'gcloud auth login' in Cloud Shell first."
+    exit 1
 fi
+echo "👤 Authenticated GCP Account: $ACTIVE_ACCOUNT"
 
-if [[ -z "${PROJECT_ID:-}" ]]; then
-    if [[ -t 0 ]]; then
-        echo ""
-        echo "Select the target Google Cloud Project for this temporary demo VM."
-        echo "Default/Current: [${CURRENT_GCP_PROJECT}]"
-        read -r -p "Enter Google Cloud Project ID (press Enter to accept default): " INPUT_PROJECT
-        PROJECT_ID="${INPUT_PROJECT:-$CURRENT_GCP_PROJECT}"
-    else
-        PROJECT_ID="$CURRENT_GCP_PROJECT"
+# Step 1: Resolve Project ID via CLI option or interactive numbered list of all available GCP projects
+select_gcp_project() {
+    echo ""
+    echo "🔍 Fetching available Google Cloud Projects for $ACTIVE_ACCOUNT..."
+    mapfile -t PROJECT_LINES < <(gcloud projects list --sort-by=projectId --format="value[separator='|'](projectId,name)" 2>/dev/null || true)
+
+    if [[ ${#PROJECT_LINES[@]} -eq 0 ]]; then
+        echo "❌ Error: No accessible Google Cloud Projects found for account '$ACTIVE_ACCOUNT'."
+        exit 1
     fi
+
+    CURRENT_GCP_PROJECT=$(gcloud config get-value project 2>/dev/null || echo "")
+    declare -a PROJECT_IDS=()
+
+    echo ""
+    echo "📋 Available Google Cloud Projects:"
+    echo "--------------------------------------------------------------------------------"
+    local idx=1
+    for line in "${PROJECT_LINES[@]}"; do
+        local pid="${line%%|*}"
+        local pname="${line#*|}"
+        PROJECT_IDS+=("$pid")
+        local active_marker=""
+        if [[ "$pid" == "$CURRENT_GCP_PROJECT" ]]; then
+            active_marker=" [current gcloud project]"
+        fi
+        printf "   [%2d] %-32s (%s)%s\n" "$idx" "$pid" "$pname" "$active_marker"
+        ((idx++))
+    done
+    echo "--------------------------------------------------------------------------------"
+
+    while true; do
+        if ! read -r -p "Select the project number [1-${#PROJECT_IDS[@]}] (or enter Project ID): " SELECTION; then
+            echo ""
+            echo "❌ Error: No project selection received."
+            exit 1
+        fi
+        SELECTION="${SELECTION#"${SELECTION%%[![:space:]]*}"}"
+        SELECTION="${SELECTION%"${SELECTION##*[![:space:]]}"}"
+
+        if [[ "$SELECTION" =~ ^[0-9]+$ ]]; then
+            if (( SELECTION >= 1 && SELECTION <= ${#PROJECT_IDS[@]} )); then
+                PROJECT_ID="${PROJECT_IDS[$((SELECTION - 1))]}"
+                break
+            else
+                echo "⚠️ Invalid selection. Please enter a number between 1 and ${#PROJECT_IDS[@]}."
+            fi
+        elif [[ -n "$SELECTION" ]]; then
+            PROJECT_ID="$SELECTION"
+            break
+        else
+            echo "⚠️ Please enter a valid project number [1-${#PROJECT_IDS[@]}]."
+        fi
+    done
+}
+
+if [[ -z "$PROJECT_ID" ]]; then
+    select_gcp_project
 fi
 
 if [[ -z "$PROJECT_ID" ]]; then
     echo "❌ Error: Project ID cannot be empty."
     exit 1
 fi
+
+echo "✅ Selected Target Project: $PROJECT_ID"
 
 # Normalize Region and Zone
 if [[ -n "${REGION:-}" ]]; then
@@ -230,12 +342,14 @@ pip install -r requirements.txt
 python3 database.py
 
 # Initialize git repository for CodeMender diff tracking
+git config --system --add safe.directory "\$APP_DIR"
 git config --global --add safe.directory "\$APP_DIR"
 git config --global user.name "ApexFin Demo Ops"
 git config --global user.email "demo-ops@apexfin.internal"
 git init "\$APP_DIR"
 git -C "\$APP_DIR" add -A
 git -C "\$APP_DIR" commit -m "Baseline: ApexFin Banking Portal with intentional demo vulnerabilities" || true
+chmod -R 777 "\$APP_DIR"
 
 echo "=== [5/6] Creating systemd service for ApexFin Portal ==="
 cat << 'SERVICE_EOF' > /etc/systemd/system/apexfin.service
@@ -260,6 +374,9 @@ RestartSec=3
 [Install]
 WantedBy=multi-user.target
 SERVICE_EOF
+
+echo "export GOOGLE_CLOUD_PROJECT=\"${PROJECT_ID}\"" > /etc/profile.d/codemender.sh
+chmod 644 /etc/profile.d/codemender.sh
 
 systemctl daemon-reload
 systemctl enable apexfin.service
@@ -338,18 +455,24 @@ echo "==========================================================================
 echo "🌐 Direct Public URL (Browser Access from Anywhere):"
 echo "   http://${EXTERNAL_IP}:5000"
 echo ""
-echo "🔐 Cloud Shell / Local Port Forwarding (If corporate firewall blocks port 5000):"
+echo "🔐 Cloud Shell Port Forwarding (If corporate firewall blocks port 5000):"
 echo "   gcloud compute ssh ${VM_NAME} --zone=${ZONE} --project=${PROJECT_ID} -- -L 5000:localhost:5000"
-echo "   Then open in browser or Cloud Shell Web Preview: http://localhost:5000"
+echo "   Then open in Cloud Shell Web Preview (Port 5000): http://localhost:5000"
 echo ""
-echo "💻 SSH Access to Run CodeMender ('cm') Inside the Sandbox VM:"
+echo "--------------------------------------------------------------------------------"
+echo "💻 CLOUD SHELL COMMAND TO LOGIN TO THE VM & RUN CODEMENDER ('cm'):"
+echo "--------------------------------------------------------------------------------"
 echo "   gcloud compute ssh ${VM_NAME} --zone=${ZONE} --project=${PROJECT_ID}"
-echo "   Inside the VM, navigate to the codebase:"
+echo ""
+echo "   Once logged into the VM, run:"
 echo "   $ cd /opt/apexfin"
+echo "   $ cm init"
 echo "   $ cm find ./app.py"
 echo "   $ cm verify <FINDING_ID>"
 echo "   $ cm fix <FINDING_ID>"
+echo "--------------------------------------------------------------------------------"
 echo ""
-echo "🧹 Deprovisioning / Teardown Instructions (Run after customer demo):"
-echo "   ./deprovision_vm.sh"
+echo "🧹 Deprovisioning / Teardown Command (Run in Cloud Shell after demo):"
+echo "   ./deprovision_vm.sh --project ${PROJECT_ID}"
+echo "   (or run './deprovision_vm.sh' to pick from the interactive project list)"
 echo "================================================================================"

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
+# Author: Pradeep Singh
+# License: Apache-2.0
 # Purpose: Environment rollback and reset script for ApexFin Banking Portal demo.
 # Architecture/Context: Restores the codebase, database, and running processes to a clean,
 #                       pristine state ready for subsequent customer demonstrations.
