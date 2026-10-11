@@ -7,10 +7,10 @@
 ## Table of Contents
 1. [Executive Summary & Demo Narrative](#executive-summary--demo-narrative)
 2. [GCP Cloud Shell Installation (Isolated Linux VM)](#gcp-cloud-shell-installation-isolated-linux-vm)
-3. [Demo Reset & Rollback (`./reset_demo.sh`)](#demo-reset--rollback-reset_demosh)
-4. [Uninstall & Deprovision Demo Resources from GCP Cloud Shell (`./deprovision_vm.sh`)](#3-uninstall--deprovision-demo-resources-from-gcp-cloud-shell-deprovision_vmsh)
-5. [Frontend UI Exploit Walkthrough (CE Demo Playbook)](#frontend-ui-exploit-walkthrough-ce-demo-playbook)
-6. [Vulnerability Identification & Remediation (CodeMender Lifecycle)](#vulnerability-identification--remediation-codemender-lifecycle)
+3. [Frontend UI Exploit Walkthrough (CE Demo Playbook)](#frontend-ui-exploit-walkthrough-ce-demo-playbook)
+4. [Vulnerability Identification & Remediation (CodeMender Lifecycle)](#vulnerability-identification--remediation-codemender-lifecycle)
+5. [Demo Reset & Rollback (`./reset_demo.sh`)](#demo-reset--rollback-reset_demosh)
+6. [Uninstall & Deprovision Demo Resources from GCP Cloud Shell (`./deprovision_vm.sh`)](#uninstall--deprovision-demo-resources-from-gcp-cloud-shell-deprovision_vmsh)
 7. [Application Architecture](#application-architecture)
 8. [Project Directory Structure](#project-directory-structure)
 9. [Frameworks & Libraries](#frameworks--libraries)
@@ -124,53 +124,6 @@ Once provisioning completes, the script prints the access commands:
   ```bash
   gcloud compute ssh apexfin-demo-vm --zone=<ZONE> --project=<YOUR_PROJECT_ID>
   ```
-
----
-
-## Demo Reset & Rollback (`./reset_demo.sh`)
-
-If you want to reset the application state inside `/opt/apexfin` on the VM between back-to-back customer sessions without reprovisioning the VM:
-
-```bash
-cd /opt/apexfin
-./reset_demo.sh
-sudo systemctl restart apexfin.service
-```
-
-**What it accomplishes**:
-* Reverts all source code modifications applied by CodeMender (`git checkout HEAD -- .`).
-* Deletes temporary candidate branches (`cm-*`) generated during `cm fix`.
-* Re-seeds a clean SQLite banking database (`apexfin.db`).
-* Cleans local CodeMender state caches and runs the unit test suite (`test_app.py`).
-
----
-
-### 3. Uninstall & Deprovision Demo Resources from GCP Cloud Shell (`./deprovision_vm.sh`)
-
-After completing your customer demo, run the combined commands below from **GCP Cloud Shell** to remove all cloud demo resources and delete the cloned `Codemender_Demo` directory so your Cloud Shell disk space stays clean:
-
-#### Option A: Interactive Project Selection (Default)
-```bash
-cd ~/Codemender_Demo
-./deprovision_vm.sh
-cd ~ && rm -rf Codemender_Demo
-```
-Displays the numbered list of all your GCP projects so you can select the project number to clean up, prompts for confirmation (`y/N`), and removes the local `Codemender_Demo` folder once finished.
-
-#### Option B: Provide the GCP Project ID Directly in the Command
-```bash
-cd ~/Codemender_Demo
-./deprovision_vm.sh --project <YOUR_PROJECT_ID>
-cd ~ && rm -rf Codemender_Demo
-```
-*(Add `-y` or `--yes` to `./deprovision_vm.sh --project <YOUR_PROJECT_ID> -y` to skip the confirmation prompt.)*
-
-**What the Uninstallation Workflow Removes**:
-1. Compute Engine VM instance `apexfin-demo-vm` (and its attached boot disk).
-2. Tag-scoped VPC firewall rule `apexfin-demo-allow-5000`.
-3. Dedicated service account `apexfin-demo-sa@<YOUR_PROJECT_ID>.iam.gserviceaccount.com` and its `roles/aiplatform.user` IAM policy binding.
-4. Cloned `Codemender_Demo` directory from your Cloud Shell home directory.
-5. Leaves all other VMs, networks, firewall rules, service accounts, and configurations in the GCP project completely untouched.
 
 ---
 
@@ -305,6 +258,53 @@ cm vcs diff
 3. **Re-test Command Injection on Gateway Diagnostics**:
    * Enter `127.0.0.1; whoami; id` into the **Target Host** field and click **Run Diagnostic Probe**.
    * **Observed Result**: Shell metacharacters (`;`) are no longer interpreted by a shell, preventing command execution.
+
+---
+
+## Demo Reset & Rollback (`./reset_demo.sh`)
+
+If you want to reset the application state inside `/opt/apexfin` on the VM between back-to-back customer sessions without reprovisioning the VM:
+
+```bash
+cd /opt/apexfin
+./reset_demo.sh
+sudo systemctl restart apexfin.service
+```
+
+**What it accomplishes**:
+* Reverts all source code modifications applied by CodeMender (`git checkout HEAD -- .`).
+* Deletes temporary candidate branches (`cm-*`) generated during `cm fix`.
+* Re-seeds a clean SQLite banking database (`apexfin.db`).
+* Cleans local CodeMender state caches and runs the unit test suite (`test_app.py`).
+
+---
+
+## Uninstall & Deprovision Demo Resources from GCP Cloud Shell (`./deprovision_vm.sh`)
+
+After completing your customer demo, run the combined commands below from **GCP Cloud Shell** to remove all cloud demo resources and delete the cloned `Codemender_Demo` directory so your Cloud Shell disk space stays clean:
+
+#### Option A: Interactive Project Selection (Default)
+```bash
+cd ~/Codemender_Demo
+./deprovision_vm.sh
+cd ~ && rm -rf Codemender_Demo
+```
+Displays the numbered list of all your GCP projects so you can select the project number to clean up, prompts for confirmation (`y/N`), and removes the local `Codemender_Demo` folder once finished.
+
+#### Option B: Provide the GCP Project ID Directly in the Command
+```bash
+cd ~/Codemender_Demo
+./deprovision_vm.sh --project <YOUR_PROJECT_ID>
+cd ~ && rm -rf Codemender_Demo
+```
+*(Add `-y` or `--yes` to `./deprovision_vm.sh --project <YOUR_PROJECT_ID> -y` to skip the confirmation prompt.)*
+
+**What the Uninstallation Workflow Removes**:
+1. Compute Engine VM instance `apexfin-demo-vm` (and its attached boot disk).
+2. Tag-scoped VPC firewall rule `apexfin-demo-allow-5000`.
+3. Dedicated service account `apexfin-demo-sa@<YOUR_PROJECT_ID>.iam.gserviceaccount.com` and its `roles/aiplatform.user` IAM policy binding.
+4. Cloned `Codemender_Demo` directory from your Cloud Shell home directory.
+5. Leaves all other VMs, networks, firewall rules, service accounts, and configurations in the GCP project completely untouched.
 
 ---
 
