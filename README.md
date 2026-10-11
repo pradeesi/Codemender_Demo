@@ -128,7 +128,7 @@ Once provisioning completes, the script prints the access commands:
 
 ### 3. Uninstall & Deprovision Demo Resources from GCP Cloud Shell (`./deprovision_vm.sh`)
 
-After completing your customer demo, run the uninstallation script from **GCP Cloud Shell** (inside the `Codemender_Demo` directory) to remove all demo resources:
+After completing your customer demo, run the uninstallation script from **GCP Cloud Shell** (inside the `Codemender_Demo` directory) to remove all cloud demo resources, and then delete the cloned directory to keep your Cloud Shell disk space clean:
 
 #### Option A: Interactive Project Selection (Default)
 ```bash
@@ -142,11 +142,19 @@ Displays the numbered list of all your GCP projects so you can select the projec
 ```
 *(Add `-y` or `--yes` to skip the confirmation prompt: `./deprovision_vm.sh --project <YOUR_PROJECT_ID> -y`)*
 
-**What the Uninstallation Script Removes**:
+#### Clean Up the Cloned Directory in Cloud Shell
+Once `./deprovision_vm.sh` completes, remove the cloned repository folder from Cloud Shell to free up disk space:
+
+```bash
+cd ~ && rm -rf Codemender_Demo
+```
+
+**What the Uninstallation Workflow Removes**:
 1. Compute Engine VM instance `apexfin-demo-vm` (and its attached boot disk).
 2. Tag-scoped VPC firewall rule `apexfin-demo-allow-5000`.
 3. Dedicated service account `apexfin-demo-sa@<YOUR_PROJECT_ID>.iam.gserviceaccount.com` and its `roles/aiplatform.user` IAM policy binding.
-4. Leaves all other VMs, networks, firewall rules, service accounts, and configurations in the project completely untouched.
+4. Cloned `Codemender_Demo` directory from your Cloud Shell home directory.
+5. Leaves all other VMs, networks, firewall rules, service accounts, and configurations in the GCP project completely untouched.
 
 ---
 
