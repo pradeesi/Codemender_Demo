@@ -249,17 +249,28 @@ if ! gcloud iam service-accounts describe "$SA_EMAIL" --project="$PROJECT_ID" &>
         --description="Isolated least-privilege identity for temporary CodeMender demo VM" \
         --quiet
     echo "   ✅ Created dedicated service account: $SA_EMAIL"
-    
-    sleep 2
-    # Grant strictly roles/aiplatform.user (only required for CodeMender AI reasoning engine)
-    gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+else
+    echo "   ℹ️ Service account '$SA_EMAIL' already exists."
+fi
+
+# Grant strictly roles/aiplatform.user with retry loop for GCP IAM propagation
+IAM_BOUND=false
+for attempt in {1..6}; do
+    if gcloud projects add-iam-policy-binding "$PROJECT_ID" \
         --member="serviceAccount:${SA_EMAIL}" \
         --role="roles/aiplatform.user" \
         --condition=None \
-        --quiet &>/dev/null
+        --quiet &>/dev/null; then
+        IAM_BOUND=true
+        break
+    fi
+    sleep 3
+done
+
+if [[ "$IAM_BOUND" == true ]]; then
     echo "   ✅ Granted strictly 'roles/aiplatform.user' (zero access to storage, compute, or secrets)"
 else
-    echo "   ℹ️ Service account '$SA_EMAIL' already exists."
+    echo "   ⚠️ Warning: Could not verify IAM policy binding after retries."
 fi
 
 # Step 5: Configure VPC Firewall Rule for Port 5000 (Strictly Tag-Scoped)

@@ -82,8 +82,13 @@ elif command -v python3 &>/dev/null; then
     python3 -m unittest test_app.py
 fi
 
+# Step 6: Restart systemd service if running on the Demo VM
+if command -v systemctl &>/dev/null && systemctl list-unit-files apexfin.service &>/dev/null; then
+    echo "🔄 Restarting apexfin.service..."
+    systemctl restart apexfin.service 2>/dev/null || sudo systemctl restart apexfin.service 2>/dev/null || true
+fi
+
 echo "============================================================"
 echo "✅ Environment successfully rolled back to pristine baseline!"
 echo "🎯 The application and codebase are 100% ready for the next customer demo."
-echo "💡 Run './deploy.sh' when you are ready to start the presentation."
 echo "============================================================"

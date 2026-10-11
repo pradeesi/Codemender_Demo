@@ -48,7 +48,7 @@ To ensure zero risk to your GCP environment:
 Open **GCP Cloud Shell**, navigate to the `CodeMender` directory, and make the scripts executable:
 
 ```bash
-chmod +x provision_vm.sh deprovision_vm.sh deploy.sh reset_demo.sh
+chmod +x provision_vm.sh deprovision_vm.sh reset_demo.sh
 ```
 
 #### Option A: Interactive Project Selection (Default)
@@ -57,7 +57,6 @@ Run the installation script without specifying a project ID:
 ```bash
 ./provision_vm.sh
 ```
-*(Or run `./deploy.sh`, which delegates to `./provision_vm.sh` by default).*
 
 When no project ID is passed in the command, the script automatically queries all GCP projects accessible to your logged-in account and displays a numbered menu:
 
@@ -332,7 +331,6 @@ CodeMender/
 ├── requirements.txt         # Core Python dependencies (Flask, Gunicorn)
 ├── provision_vm.sh          # Cloud Shell installer: provisions isolated GCE Linux VM & CodeMender
 ├── deprovision_vm.sh        # Cloud Shell uninstaller: removes demo VM, firewall rule, and demo SA
-├── deploy.sh                # Wrapper script (defaults to provision_vm.sh from Cloud Shell)
 ├── reset_demo.sh            # Environment rollback script for resetting demo state on the VM
 ├── app.py                   # Main Flask application with intentional demo vulnerabilities
 ├── database.py              # SQLite schema creation and financial sample seed data
